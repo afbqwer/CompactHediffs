@@ -278,7 +278,9 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			{
 				IGrouping<HediffDef, Hediff> grouping = groupings[i];
 				string hediffLabel = GenLabelForHediffGroup(grouping);
-				var hediffsByPriority = grouping.OrderByDescending(x => x.TendableNow(true) ? x.TendPriority : -1);
+				var hediffsByPriority = grouping
+                    .OrderByDescending(x => x.TendableNow(true) ? x.TendPriority : -1)
+                    .ToList();
 
 				Hediff representativeHediff = grouping.First();
 				if (grouping.Count() > 1)
@@ -353,8 +355,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				GUI.color = Color.white;
 				if (SmartMedicine.active)
 				{
-					MedicalCareCategory defaultCare = SmartMedicine.GetCare(pawn);
-					UI_SmartMedicine.AddSmartMedicineFloatMenuButton(fullHediffRect, hediffsByPriority, defaultCare);
+					UI_SmartMedicine.AddSmartMedicineFloatMenuButton(fullHediffRect, hediffsByPriority);
 				}
 
 
@@ -467,11 +468,11 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				}
 
 				//draw other mod icon
+				GUI.color = Color.white;
 				if (SmartMedicine.active)
-				{
-					Rect iconRect = new Rect(rowRect.width - (widthAccumulator + SmartMedicineIconWidth), fullHediffRect.y + iconOffset, SmartMedicineIconWidth, SmartMedicineIconHeight).Rounded();
-					MedicalCareCategory defaultCare = SmartMedicine.GetCare(pawn);
-					UI_SmartMedicine.DrawSmartMedicineIcon(iconRect, defaultCare, hediffsByPriority.ToList());
+                {
+					Rect iconRect = new Rect(rowRect.width - (widthAccumulator + SmartMedicineIconWidth), fullHediffRect.y + iconOffset, rowRect.width, SmartMedicineIconHeight).Rounded();
+					UI_SmartMedicine.DrawSmartMedicineIcon(iconRect, hediffsByPriority.ToList(), ref widthAccumulator, SmartMedicineIconWidth);
 				}
                 if (ChooseYourMedicine.active)
                 {

@@ -18,32 +18,46 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
 
 		public static Texture2D[] careTextures;
 
-		public delegate void _LabelButton(Rect rect, string text, Hediff hediff);
+		public delegate List<FloatMenuOption> _CreateCareMenuOptionsWithList(List<Hediff> affectedHediffs, Hediff primaryHediff = null);
+        public delegate List<Action<Rect>> _GetElementsByList(List<Hediff> hediffs);
 		public delegate Dictionary<Hediff, MedicalCareCategory> _PriorityCareCompGet();
 		public delegate MedicalCareCategory _GetCare(Pawn pawn);
-		public static _LabelButton LabelButton;
+
+        public static _CreateCareMenuOptionsWithList CreateCareMenuOptionsWithList;
+        public static _GetElementsByList GetElementsByList;
 		public static _PriorityCareCompGet PriorityCareCompGet;
 		public static _GetCare GetCare;
 
 		static SmartMedicine()
 		{
-			active = ModLister.GetActiveModWithIdentifier("Uuugggg.SmartMedicine") != null;
-			if (active)
-			{
-                try
-                {
-                    careTextures = AccessTools.StaticFieldRefAccess<Texture2D[]>(AccessTools.Field(typeof(MedicalCareUtility), "careTextures")).Invoke();
+			active = ModLister.AnyModActiveNoSuffix(new[] {"Memegoddess.SmartMedicine" });
+            if (!active) return;
 
-                    LabelButton = AccessTools.MethodDelegate<_LabelButton>(AccessTools.Method("SmartMedicine.HediffRowPriorityCare:LabelButton"));
-                    PriorityCareCompGet = AccessTools.MethodDelegate<_PriorityCareCompGet>(AccessTools.Method("SmartMedicine.PriorityCareComp:Get"));
-                    GetCare = AccessTools.MethodDelegate<_GetCare>(AccessTools.Method("SmartMedicine.GetPawnMedicalCareCategory:GetCare"));
-                }
-                catch
-                {
-                    Log.Error("Compact hediffs - SmartMedicine patch failed.");
-                    active = false;
-                }
-			}
-		}
+            try
+            {
+                careTextures = AccessTools.StaticFieldRefAccess<Texture2D[]>(AccessTools.Field(typeof(MedicalCareUtility), "careTextures")).Invoke();
+
+                PriorityCareCompGet = AccessTools.MethodDelegate<_PriorityCareCompGet>(AccessTools.Method("SmartMedicine.PriorityCareSettingsComp:Get"));
+                GetCare = AccessTools.MethodDelegate<_GetCare>(AccessTools.Method("SmartMedicine.GetPawnMedicalCareCategory:GetCare"));
+
+                CreateCareMenuOptionsWithList = AccessTools.MethodDelegate<_CreateCareMenuOptionsWithList>(
+                    AccessTools.Method("SmartMedicine.HediffRowPriorityCare:CreateCareMenuOptionsWithList"));
+
+                GetElementsByList = AccessTools.MethodDelegate<_GetElementsByList>(
+                    AccessTools.Method("SmartMedicine.HediffRowPriorityCare:GetElementsByList"));
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Compact hediffs - SmartMedicine patch failed." +
+                          $"\n{nameof(careTextures)}: {careTextures != null}" +
+                          $"\n{nameof(PriorityCareCompGet)}: {PriorityCareCompGet != null}" +
+                          $"\n{nameof(GetCare)}: {GetCare != null}" +
+                          $"\n{nameof(CreateCareMenuOptionsWithList)}: {CreateCareMenuOptionsWithList != null}" +
+                          $"\n{nameof(GetElementsByList)}: {GetElementsByList != null}" +
+                          $"\n{ex.Message}" +
+                          $"\n{ex.StackTrace}");
+                active = false;
+            }
+        }
     }
 }
