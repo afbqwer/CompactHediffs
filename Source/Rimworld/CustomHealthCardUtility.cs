@@ -772,9 +772,6 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 			Color hediffColor = GetHediffColor(settings, hediff);
 
-			if (!hasImmunity && !hasSeverity)
-				return 0;
-
 			GUI.color = Color.black;
 			GUI.DrawTexture(barRect, Textures.translucentWhite);
 
