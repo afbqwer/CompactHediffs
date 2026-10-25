@@ -882,6 +882,11 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				commonTexture = Textures.Bar_Malnutrition;
 				severityTexture = Textures.Bar_Malnutrition;
 			}
+			else if (hediff.def == HediffDefOf.FoodPoisoning || hediff.def == HediffDefOf.ToxicBuildup)
+			{
+				commonTexture = Textures.Bar_DNA;
+				severityTexture = Textures.Bar_DNA;
+			}
 			else if (ModsConfig.AnomalyActive && (hediff.def == HediffDefOf.CubeComa || hediff.def == HediffDefOf.CubeInterest || hediff.def == HediffDefOf.CubeRage || hediff.def == HediffDefOf.CubeWithdrawal))
 			{
 				commonTexture = Textures.Bar_Cubes;
@@ -1070,6 +1075,11 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				return hediff.def.maxSeverity;
 
 			if (hediff is Hediff_Pregnant)
+				return 1f;
+
+			// 食物中毒（FoodPoisoning）没有 maxSeverity，严重度从 initialSeverity=1 单调衰减到 0，
+			// 原版因此不画进度条。它的上限是确定的 1，这里特判一下，好让 Bar_DNA 的“恢复进度”能显示出来。
+			if (hediff.def == HediffDefOf.FoodPoisoning)
 				return 1f;
 
 			return 0f;

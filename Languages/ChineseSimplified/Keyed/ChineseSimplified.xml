@@ -1,0 +1,86 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<LanguageData>
+	<CompactHediffs_ModTitle>紧凑状态栏</CompactHediffs_ModTitle>
+	
+	<settings_selectExamplePawnIngame>在游戏中选中一名角色以查看预览。</settings_selectExamplePawnIngame>
+	
+	<settings_IsEnabled>启用</settings_IsEnabled>
+	<settings_IsEnabled_tooltip>启用本模组的所有界面改动</settings_IsEnabled_tooltip>
+	
+	<settings_replacingPartInBodypart>植入物内联显示</settings_replacingPartInBodypart>
+	<settings_replacingPartInBodypart_tooltip>会替换身体部位的植入物将并入部位名称一起显示</settings_replacingPartInBodypart_tooltip>
+	
+	<settings_italicizeMissing>缺失部位使用斜体</settings_italicizeMissing>
+	<settings_italicizeMissing_tooltip>缺失的身体部位名称使用斜体显示</settings_italicizeMissing_tooltip>
+	
+	<settings_evenOddHighlights>隔行高亮</settings_evenOddHighlights>
+	<settings_evenOddHighlights_tooltip>高亮偶数行（与原版一致）</settings_evenOddHighlights_tooltip>
+	
+	<settings_verticalSeparator>分隔线（纵向）</settings_verticalSeparator>
+	<settings_verticalSeparator_tooltip>在身体部位名称与其状态之间绘制纵向分隔线</settings_verticalSeparator_tooltip>
+	
+	<settings_horizontalSeparator>分隔线（横向）</settings_horizontalSeparator>
+	<settings_horizontalSeparator_tooltip>在不同身体部位条目之间绘制横向分隔线</settings_horizontalSeparator_tooltip>
+	
+	<settings_internalSeparator>分隔线（内部）</settings_internalSeparator>
+	<settings_internalSeparator_tooltip>在同一部位下的多条状态之间绘制横向分隔线</settings_internalSeparator_tooltip>
+	
+	<settings_separatorNightMode>分隔线夜间模式</settings_separatorNightMode>
+	<settings_separatorNightMode_tooltip>分隔线使用黑色而非灰色</settings_separatorNightMode_tooltip>
+	
+	<settings_bodypartHealthbars>部位血条</settings_bodypartHealthbars>
+	<settings_bodypartHealthbars_tooltip>为身体部位绘制血条</settings_bodypartHealthbars_tooltip>
+	<settings_healthBarPosition>血条位置</settings_healthBarPosition>
+	<settings_healthBarPosition_tooltip>部位血条的显示位置</settings_healthBarPosition_tooltip>
+	
+	<settings_tendPrioritySort>按治疗优先级排序</settings_tendPrioritySort>
+	<settings_tendPrioritySort_tooltip>同一部位下的状态按治疗优先级排序</settings_tendPrioritySort_tooltip>
+	
+	<settings_bleedingIcons>自定义流血图标</settings_bleedingIcons>
+	<settings_bleedingIcons_tooltip>用随出血程度变化的自定义图标替换原版流血图标</settings_bleedingIcons_tooltip>
+	
+	<settings_tendingIcons>自定义治疗质量图标</settings_tendingIcons>
+	<settings_tendingIcons_tooltip>用随治疗质量变化的自定义图标替换原版图标</settings_tendingIcons_tooltip>
+	
+	<settings_bloodlossSpecialHandling>失血特殊显示</settings_bloodlossSpecialHandling>
+	<settings_bloodlossSpecialHandling_tooltip>对失血做特殊处理（颜色随严重程度变化，闪烁速度随出血速度变化）</settings_bloodlossSpecialHandling_tooltip>
+	
+	<settings_extraTabWidth>健康标签页加宽</settings_extraTabWidth>
+	<settings_extraTabHeight>健康标签页加高</settings_extraTabHeight>
+	
+	<settings_severityBars>严重程度／免疫性条</settings_severityBars>
+	<settings_severityBars_tooltip>为状态的严重程度／免疫性进度绘制进度条</settings_severityBars_tooltip>
+	
+	<SeverityBarMode_Off>关闭</SeverityBarMode_Off>
+	<SeverityBarMode_LeftToRight>从左到右</SeverityBarMode_LeftToRight>
+	<SeverityBarMode_EdgeToMiddle>两侧到中间</SeverityBarMode_EdgeToMiddle>
+	<SeverityBarMode_MiddleToEdge>中间到两侧</SeverityBarMode_MiddleToEdge>
+	<SeverityBarMode_Off_tooltip>不显示进度条</SeverityBarMode_Off_tooltip>
+	<SeverityBarMode_LeftToRight_tooltip>单条进度条，从左向右推进</SeverityBarMode_LeftToRight_tooltip>
+	<SeverityBarMode_EdgeToMiddle_tooltip>从两侧向中间延伸，进度满时在中间汇合</SeverityBarMode_EdgeToMiddle_tooltip>
+	<SeverityBarMode_MiddleToEdge_tooltip>从中间向两侧延伸，进度满时抵达两端</SeverityBarMode_MiddleToEdge_tooltip>
+
+	<settings_severityBarPosition>严重程度条位置</settings_severityBarPosition>
+	<settings_severityBarPosition_tooltip>严重程度条的显示位置</settings_severityBarPosition_tooltip>
+	
+	<settings_severityBarTextured>进度条纹理</settings_severityBarTextured>
+	<settings_severityBarTextured_tooltip>部分进度条使用图案纹理填充。</settings_severityBarTextured_tooltip>
+	
+	<settings_sharpBarTextures>锐化进度条纹理</settings_sharpBarTextures>
+	<settings_sharpBarTextures_tooltip>使用预先缩放好的 1:1 纹理，而不是把 4 倍尺寸的贴图缩小显示。图案保持锐利，不会被 mipmap 过滤糊掉。仅在条高为 4 像素（默认值）时生效。</settings_sharpBarTextures_tooltip>
+	
+	<settings_severityBarHighContrast>严重程度条高对比度</settings_severityBarHighContrast>
+	<settings_severityBarHighContrast_tooltip>严重程度／免疫性条使用高对比配色（绿色代表良好，红色代表危险）</settings_severityBarHighContrast_tooltip>
+	
+	<settings_showCumulativeThreatment>显示累计治疗条</settings_showCumulativeThreatment>
+	<settings_showCumulativeThreatment_tooltip>为需要累计一定治疗质量才能治愈的状态显示进度条</settings_showCumulativeThreatment_tooltip>
+	
+	<settings_showHiddenProgressConditions>显示隐藏的进度条</settings_showHiddenProgressConditions>
+	<settings_showHiddenProgressConditions_tooltip>为原版中隐藏进度信息的状态显示进度条</settings_showHiddenProgressConditions_tooltip>
+	
+
+	<BarPosition_Above>上方</BarPosition_Above>
+	<BarPosition_Below>下方</BarPosition_Below>
+	<BarPosition_Above_tooltip>进度条显示在文字上方</BarPosition_Above_tooltip>
+	<BarPosition_Below_tooltip>进度条显示在文字下方</BarPosition_Below_tooltip>
+</LanguageData>
