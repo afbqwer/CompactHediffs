@@ -2,7 +2,7 @@
 <ModMetaData>
 	<name>Compact Hediffs (Forked)</name>
 	<author>PeteTimesSix</author>  
-	<packageId>PeteTimesSix.CompactHediffs</packageId>
+	<packageId>assssssqwww.CompactHediffs</packageId>
 	<supportedVersions>
 		<li>1.7</li>
 	</supportedVersions>
@@ -20,6 +20,15 @@
 		<li>Andromeda.NiceHealthTab</li>
 	</loadAfter>
 	<description>
-
+[url="https://steamcommunity.com/sharedfiles/filedetails/?id=2031734067"]Original
+Compact Hediffs[/url]Author: PeteTimesSix
+[url="https://github.com/afbqwer/CompactHediffs"]GitHub[/url]
+Features:
+[list]
+[*]Performance has been improved
+[*]Fixed the texture issues
+[*]New settings options have been added
+[*]Fully compatible with the Nice Health Tab
+[/list]
 	</description>
 </ModMetaData>
