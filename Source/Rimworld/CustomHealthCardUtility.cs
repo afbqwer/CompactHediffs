@@ -849,12 +849,13 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			if (settings.bloodlossSpecialHandling && hediff.def == HediffDefOf.BloodLoss)
 			{
 				var bloodlossSpeed = Math.Min(hediff.pawn.health.hediffSet.BleedRateTotal, 4f);
+				// 先定色再乘脉冲：hediffColor 的 alpha 恒为 1，先乘后覆盖会把脉冲整段丢掉（条就不会闪）
+				commonColor = hediffColor;
 				if (bloodlossSpeed >= 0.1f)
 				{
 					var alphaMult = Pulser.PulseBrightness(0.5f + bloodlossSpeed * 0.75f, 0.5f);
 					commonColor.a *= alphaMult;
 				}
-				commonColor = hediffColor;
 				commonTexture = Textures.Bar_Ragged;
 			}
 			else
