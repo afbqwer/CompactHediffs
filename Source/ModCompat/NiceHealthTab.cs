@@ -36,6 +36,7 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
 
         private static bool initialized;
         private static bool available;
+        private static bool bloodLossBarAvailable;
 
         private static Type? bodyPartTableType;
         private static Type? partBlockType;
@@ -58,6 +59,16 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
         private static FieldInfo? partBlockOwnerField;
         private static FieldInfo? partBlockGeometryField;
 
+        // NHT 的全身失血提示块（dangerList 里的 DangerBlock）
+        private static Type? dangerBlockType;
+        private static FieldInfo? dangerBlockPawnField;
+        private static FieldInfo? dangerBlockGeometryField;
+        private static FieldInfo? dangerBlockVisibleField;
+        private static FieldInfo? dangerBlockBloodProfileField;
+        private static FieldInfo? bloodProfileUsePawnIconColorField;
+        private static FieldInfo? bloodProfileIconColorField;
+        private static int dangerRowsBefore;
+
         private static FieldInfo? hoveredHediffField;
         private static FieldInfo? animatedRowHeightField;
 
@@ -77,8 +88,12 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
 
         private static MethodInfo? openFloatMenuForPartMethod;
         private static bool partClickWarningLogged;
+        private static bool bloodLossBarBroken;
 
         public static bool Available => available;
+
+        /// <summary>NHT 的失血提示块结构可用（失血条可以显示）。</summary>
+        public static bool BloodLossBarAvailable => bloodLossBarAvailable;
 
         /// <summary>当前是否真的在使用紧凑行：NHT 存在、总开关打开、兼容开关打开。</summary>
         public static bool Active =>
@@ -86,6 +101,13 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
             && CompactHediffsMod.Settings != null
             && CompactHediffsMod.Settings.Enabled
             && CompactHediffsMod.Settings.niceHealthTabCompat;
+
+        /// <summary>NHT 失血提示条：独立开关，不要求同时开启身体部位紧凑行。</summary>
+        public static bool BloodLossBarActive =>
+            bloodLossBarAvailable
+            && CompactHediffsMod.Settings != null
+            && CompactHediffsMod.Settings.Enabled
+            && CompactHediffsMod.Settings.niceHealthTabBloodLossBar;
 
         public static void Init(Harmony harmony)
         {
@@ -128,6 +150,19 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
                 partBlockGeometryField = AccessTools.Field(partBlockType, "Geometry"); // 继承自 MilkyWay.Widget
                 ownerGeometryField = AccessTools.Field(bodyPartTableType, "Geometry");
 
+                dangerBlockType = AccessTools.Inner(bodyPartTableType, "DangerBlock");
+                if (dangerBlockType != null)
+                {
+                    dangerBlockPawnField = AccessTools.Field(dangerBlockType, "Pawn");
+                    dangerBlockGeometryField = AccessTools.Field(dangerBlockType, "Geometry");
+                    dangerBlockVisibleField = AccessTools.Field(dangerBlockType, "Visible");
+                    dangerBlockBloodProfileField = AccessTools.Field(dangerBlockType, "BloodProfile");
+
+                    var bloodProfileType = AccessTools.TypeByName("NiceHealthTab.BloodDisplayProfile");
+                    bloodProfileUsePawnIconColorField = bloodProfileType != null ? AccessTools.Field(bloodProfileType, "UsePawnIconColor") : null;
+                    bloodProfileIconColorField = bloodProfileType != null ? AccessTools.Field(bloodProfileType, "IconColor") : null;
+                }
+
                 var filterType = AccessTools.TypeByName("NiceHealthTab.HediffListFilter");
                 hoveredHediffField = filterType != null ? AccessTools.Field(filterType, "HoveredHediff") : null;
 
@@ -165,10 +200,30 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
                         prefix: new HarmonyMethod(typeof(NiceHealthTab), nameof(BuildRows_Prefix)));
                 }
 
+                // 全身失血提示条是附加功能：结构不匹配时只停用它，不影响上面的紧凑行
+                var dangerDrawMethod = dangerBlockType != null ? AccessTools.Method(dangerBlockType, "Draw") : null;
+                var addDangerMethod = FindMethod(bodyPartTableType, "AddDangerBlock");
+                if (dangerBlockType != null && dangerDrawMethod != null && addDangerMethod != null
+                    && dangerBlockPawnField != null && dangerBlockGeometryField != null && dangerBlockVisibleField != null)
+                {
+                    harmony.Patch(addDangerMethod,
+                        prefix: new HarmonyMethod(typeof(NiceHealthTab), nameof(AddDangerBlock_Prefix)),
+                        postfix: new HarmonyMethod(typeof(NiceHealthTab), nameof(AddDangerBlock_Postfix)));
+
+                    harmony.Patch(dangerDrawMethod,
+                        postfix: new HarmonyMethod(typeof(NiceHealthTab), nameof(DangerBlock_Draw_Postfix)));
+
+                    bloodLossBarAvailable = true;
+                }
+                else
+                {
+                    Log.Warning("[CompactHediffs] Nice Health Tab 的失血提示块结构不匹配，失血条已停用（紧凑行不受影响）。");
+                }
+
                 appliedSettingsStamp = ComputeSettingsStamp();
 
                 available = true;
-                Log.Message("[CompactHediffs] 已接入 Nice Health Tab：新健康页的身体部位 hediff 列表将使用紧凑行（可在设置中关闭）。");
+                Log.Message("[CompactHediffs] 已接入 Nice Health Tab：身体部位列表使用紧凑行，失血提示补上严重度条（均可在设置中关闭）。");
             }
             catch (Exception ex)
             {
@@ -353,6 +408,133 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
             }
         }
 
+        /// <summary>
+        /// NHT 的失血提示块只有图标 + 文字。这里给这一行额外留出条高，
+        /// 由 <see cref="DangerBlock_Draw_Postfix"/> 在文字下方画失血严重度条。
+        /// </summary>
+        public static void AddDangerBlock_Prefix(object[] __args)
+        {
+            dangerRowsBefore = __args != null && __args.Length > 0 && __args[0] is System.Collections.IList rows
+                ? rows.Count
+                : -1;
+        }
+
+        public static void AddDangerBlock_Postfix(object __instance, object[] __args)
+        {
+            if (!BloodLossBarActive || bloodLossBarBroken)
+                return;
+
+            try
+            {
+                // AddDangerBlock(List<AnimatedListRow> danger)
+                if (__args == null || __args.Length < 1 || !(__args[0] is System.Collections.IList rows) || rows.Count == 0)
+                    return;
+
+                // 方法可能因“没有失血问题”提前返回，必须确认它确实加了一行
+                if (dangerRowsBefore < 0 || rows.Count != dangerRowsBefore + 1)
+                    return;
+
+                var pawn = bodyPartPawnField?.GetValue(__instance) as Pawn;
+                if (pawn == null)
+                    return;
+
+                int barHeight = CustomHealthCardUtility.GetBloodLossBarHeight(pawn);
+                if (barHeight <= 0)
+                    return;
+
+                // 原内容在行内垂直居中；多留 2*条高+4，文字底部与条之间就有 1px 空隙
+                object row = rows[rows.Count - 1]!;
+                var heightField = animatedRowHeightField ??= AccessTools.Field(row.GetType(), "Height");
+                if (heightField?.GetValue(row) is float current)
+                    heightField.SetValue(row, current + barHeight * 2 + 4);
+            }
+            catch (Exception ex)
+            {
+                DisableBloodLossBar(ex);
+            }
+        }
+
+        /// <summary>NHT 的全身失血提示绘制完之后，在文字下方补一条失血严重度条。</summary>
+        public static void DangerBlock_Draw_Postfix(object __instance)
+        {
+            if (!BloodLossBarActive || bloodLossBarBroken)
+                return;
+
+            try
+            {
+                if (dangerBlockVisibleField?.GetValue(__instance) is bool visible && !visible)
+                    return;
+
+                var pawn = dangerBlockPawnField?.GetValue(__instance) as Pawn;
+                if (pawn == null || pawn.health == null || pawn.health.hediffSet == null)
+                    return;
+
+                if (!HasBloodProblem(pawn))
+                    return;
+
+                if (!(dangerBlockGeometryField?.GetValue(__instance) is Rect geometry)
+                    || geometry.width <= 0f || geometry.height <= 0f)
+                    return;
+
+                int barHeight = CustomHealthCardUtility.GetBloodLossBarHeight(pawn);
+                if (barHeight <= 0)
+                    return;
+
+                // 和 NHT 的文字区对齐：左边让出 4 + 22(图标) + 4，右边留 4
+                float barX = geometry.x + 30f;
+                float barWidth = geometry.xMax - barX - 4f;
+                if (barWidth <= 1f)
+                    return;
+
+                Rect barRect = new Rect(barX, geometry.yMax - barHeight - 1f, barWidth, barHeight);
+                CustomHealthCardUtility.DrawBloodLossBar(barRect, pawn, GetNhtBloodColorOverride(__instance));
+            }
+            catch (Exception ex)
+            {
+                DisableBloodLossBar(ex);
+            }
+        }
+
+        /// <summary>与 NHT 的 DangerBlock 完全一致的显示条件。</summary>
+        private static bool HasBloodProblem(Pawn pawn)
+        {
+            if (pawn == null || pawn.health == null || pawn.health.hediffSet == null)
+                return false;
+
+            if (pawn.health.hediffSet.BleedRateTotal > 0.01f)
+                return true;
+
+            Hediff? bloodLoss = pawn.health.hediffSet.GetFirstHediffOfDef(HediffDefOf.BloodLoss);
+            return bloodLoss != null && bloodLoss.Visible;
+        }
+
+        /// <summary>
+        /// NHT 的异色血液（neutro）使用它自己的图标色；普通血液继续用本模组的失血渐变色。
+        /// </summary>
+        private static Color? GetNhtBloodColorOverride(object dangerBlock)
+        {
+            object? profile = dangerBlockBloodProfileField?.GetValue(dangerBlock);
+            if (profile == null)
+                return null;
+
+            if (bloodProfileUsePawnIconColorField?.GetValue(profile) is bool usePawnColor && usePawnColor
+                && bloodProfileIconColorField?.GetValue(profile) is Color iconColor)
+            {
+                return iconColor;
+            }
+
+            return null;
+        }
+
+        private static void DisableBloodLossBar(Exception ex)
+        {
+            if (bloodLossBarBroken)
+                return;
+
+            bloodLossBarBroken = true;
+            Log.Warning($"[CompactHediffs] Nice Health Tab 失血条绘制失败，已停用该附加功能：\n{ex}");
+        }
+
         private static void CachePartHediffs(object owner, Pawn pawn, BodyPartRecord? part, List<Hediff> hediffs)
         {
             Dictionary<(int PawnId, int PartIndex), List<Hediff>> map = partHediffs.GetOrCreateValue(owner);
@@ -424,6 +606,7 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
             {
                 int hash = s.Enabled ? 1 : 0;
                 hash = hash * 31 + (s.niceHealthTabCompat ? 1 : 0);
+                hash = hash * 31 + (s.niceHealthTabBloodLossBar ? 1 : 0);
                 hash = hash * 31 + (s.replacingPartInBodypart ? 1 : 0);
                 hash = hash * 31 + (s.italicizeMissing ? 1 : 0);
                 hash = hash * 31 + (s.verticalSeparator ? 1 : 0);

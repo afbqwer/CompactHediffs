@@ -174,6 +174,17 @@ namespace PeteTimesSix.CompactHediffs
                     niceHealthTabCompat = localCompat;
                     ModCompat.NiceHealthTab.NotifySettingsChanged();
                 }
+
+                if (ModCompat.NiceHealthTab.BloodLossBarAvailable)
+                {
+                    bool localBloodLossBar = niceHealthTabBloodLossBar;
+                    listingStandard.CheckboxLabeled("settings_niceHealthTabBloodLossBar".Translate(), ref localBloodLossBar, "settings_niceHealthTabBloodLossBar_tooltip".Translate());
+                    if (localBloodLossBar != niceHealthTabBloodLossBar)
+                    {
+                        niceHealthTabBloodLossBar = localBloodLossBar;
+                        ModCompat.NiceHealthTab.NotifySettingsChanged();
+                    }
+                }
             }
             listingStandard.GapLine();
 

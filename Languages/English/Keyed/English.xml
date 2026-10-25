@@ -10,6 +10,8 @@
 	
 	<settings_niceHealthTabCompat>Nice Health Tab compact rows</settings_niceHealthTabCompat>
 	<settings_niceHealthTabCompat_tooltip>Replace the hediff rows of Nice Health Tab's new health tab with this mod's compact rows. Nice Health Tab keeps its filters, disease prognosis, hit chance, armor and recovery-time panels, surgery previews and its own status/danger blocks.</settings_niceHealthTabCompat_tooltip>
+	<settings_niceHealthTabBloodLossBar>Nice Health Tab blood loss bar</settings_niceHealthTabBloodLossBar>
+	<settings_niceHealthTabBloodLossBar_tooltip>Draw a blood loss severity bar under Nice Health Tab's whole-body bleeding warning. It follows this mod's severity bar style, colors and pulse (hidden while severity bars are set to Off).</settings_niceHealthTabBloodLossBar_tooltip>
 
 	<settings_replacingPartInBodypart>Inline augments</settings_replacingPartInBodypart>
 	<settings_replacingPartInBodypart_tooltip>Augments that replace a body part will be listed as part of their label</settings_replacingPartInBodypart_tooltip>
