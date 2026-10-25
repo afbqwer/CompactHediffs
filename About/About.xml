@@ -17,6 +17,7 @@
     </modDependencies>
 	<loadAfter>
 		<li>brrainz.harmony</li>
+		<li>Andromeda.NiceHealthTab</li>
 	</loadAfter>
 	<description>
 Alters the health tab hediff listing to be slightly less ugly and slightly more customisable.
@@ -31,6 +32,7 @@ Alters the health tab hediff listing to be slightly less ugly and slightly more 
 - Sorting hediffs for body part by severity
 - Per-body part health bars
 - Severity/Immunity progress bars
+- Optional Nice Health Tab integration: its body-part hediff list uses these compact rows (filters, prognoses, hit/armor/timing panels stay with Nice Health Tab)
 - Expandable health tab size (yes, I &lt;b&gt;am&lt;/b&gt; aware of the irony of a mod called Compact Hediffs making the tab &lt;i&gt;larger&lt;/i&gt;)
  
   --------------------

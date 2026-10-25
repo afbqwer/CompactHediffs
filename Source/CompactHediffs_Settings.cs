@@ -28,13 +28,24 @@ namespace PeteTimesSix.CompactHediffs
             get => _enabled;
             set
             {
+                bool changed = _enabled != value;
                 _enabled = value;
                 if (value)
                     ITab_Pawn_Health_Patches.SetExtraSize(extraTabWidth, extraTabHeight);
                 else
                     ITab_Pawn_Health_Patches.SetExtraSize(0f, 0f);
+
+                // 总开关会改变 NHT 的行高（紧凑行 / 自带行），让它下一帧重建列表
+                if (changed)
+                    ModCompat.NiceHealthTab.NotifySettingsChanged();
             }
         }
+
+        /// <summary>
+        /// Nice Health Tab 兼容：接管它的新健康标签页里的 hediff 行（身体部位块）。
+        /// NHT 的筛选、疾病预后、命中/护甲/恢复时间等面板仍由 NHT 自己绘制。
+        /// </summary>
+        public bool niceHealthTabCompat = true;
 
         public bool replacingPartInBodypart = true;
         public bool italicizeMissing = true;
@@ -74,6 +85,7 @@ namespace PeteTimesSix.CompactHediffs
         {
             base.ExposeData();
             Scribe_Values.Look(ref _enabled, "isEnabled", true);
+            Scribe_Values.Look(ref niceHealthTabCompat, "niceHealthTabCompat", true);
 
             Scribe_Values.Look(ref replacingPartInBodypart, "replacingPartInBodypart", true);
             Scribe_Values.Look(ref italicizeMissing, "italicizeMissing", true);
@@ -145,6 +157,17 @@ namespace PeteTimesSix.CompactHediffs
             bool localEnabled = Enabled;
             listingStandard.CheckboxLabeled("settings_IsEnabled".Translate(), ref localEnabled, "settings_IsEnabled_tooltip".Translate());
             Enabled = localEnabled;
+
+            if (ModCompat.NiceHealthTab.Available)
+            {
+                bool localCompat = niceHealthTabCompat;
+                listingStandard.CheckboxLabeled("settings_niceHealthTabCompat".Translate(), ref localCompat, "settings_niceHealthTabCompat_tooltip".Translate());
+                if (localCompat != niceHealthTabCompat)
+                {
+                    niceHealthTabCompat = localCompat;
+                    ModCompat.NiceHealthTab.NotifySettingsChanged();
+                }
+            }
             listingStandard.GapLine();
 
             listingStandard.CheckboxLabeled("settings_replacingPartInBodypart".Translate(), ref replacingPartInBodypart, "settings_replacingPartInBodypart_tooltip".Translate());

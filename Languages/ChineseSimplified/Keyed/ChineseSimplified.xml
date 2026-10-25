@@ -8,6 +8,9 @@
 	<settings_IsEnabled>启用</settings_IsEnabled>
 	<settings_IsEnabled_tooltip>启用本模组的所有界面改动</settings_IsEnabled_tooltip>
 	
+	<settings_niceHealthTabCompat>Nice Health Tab 紧凑行</settings_niceHealthTabCompat>
+	<settings_niceHealthTabCompat_tooltip>把 Nice Health Tab 新健康页里的 hediff 行替换为本模组的紧凑行。Nice Health Tab 仍保留筛选、疾病预后、命中率、护甲、恢复时间、手术预览以及它自己的状态/危险提示块。</settings_niceHealthTabCompat_tooltip>
+
 	<settings_replacingPartInBodypart>植入物内联显示</settings_replacingPartInBodypart>
 	<settings_replacingPartInBodypart_tooltip>会替换身体部位的植入物将并入部位名称一起显示</settings_replacingPartInBodypart_tooltip>
 	

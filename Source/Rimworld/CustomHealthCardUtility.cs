@@ -307,6 +307,13 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 		private static readonly Stack<float> viewportHeightStack = new Stack<float>(4);
 		private const float ViewportCullMargin = 128f;
 
+		/// <summary>
+		/// 别的模组（目前是 Nice Health Tab）在自己维护的滚动视图里调用本行绘制时，打开这个开关。
+		/// 此时原版 DrawHediffListing 的补丁并没有包住这段绘制，viewportDepth 里可能是另一张卡留下的旧值，
+		/// 按那份状态裁剪会把整行误判为“滚出屏幕”，所以这类调用一律不做裁剪。
+		/// </summary>
+		public static bool SuppressViewportCulling { get; set; }
+
 		/// <summary>进入 DrawHediffListing 时记录可视区高度（列表高度减去底部流血提示行）。</summary>
 		public static void BeginListingViewport(float listingHeight)
 		{
@@ -342,7 +349,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 		/// <summary>整行（含身体部位标签）完全滚出可视区时返回 true，此时只需要累加高度、不需要绘制。</summary>
 		private static bool IsRowOutsideViewport(int rowY, int rowHeight)
 		{
-			if (viewportDepth <= 0 || viewportHeight <= 0f || scrollPositionField == null)
+			if (SuppressViewportCulling || viewportDepth <= 0 || viewportHeight <= 0f || scrollPositionField == null)
 				return false;
 
 			float scrollY = scrollPositionField.Invoke().y;
@@ -492,6 +499,21 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 		public static void DrawHediffRow(Rect rowRect, Pawn pawn, IEnumerable<Hediff> diffs, ref float curY, float rowLeftPad)
 		{
+			DrawHediffRowInternal(rowRect, pawn, diffs, ref curY, rowLeftPad, draw: true);
+		}
+
+		/// <summary>
+		/// 只做排版测量，返回这一行需要的总高度（不绘制任何东西）。
+		/// 供外部模组（Nice Health Tab）在把行高度交给它自己的布局系统之前使用。
+		/// </summary>
+		public static float MeasureHediffRowHeight(Rect rowRect, Pawn pawn, IEnumerable<Hediff> diffs, float rowLeftPad)
+		{
+			float curY = 0f;
+			return DrawHediffRowInternal(rowRect, pawn, diffs, ref curY, rowLeftPad, draw: false);
+		}
+
+		private static float DrawHediffRowInternal(Rect rowRect, Pawn pawn, IEnumerable<Hediff> diffs, ref float curY, float rowLeftPad, bool draw)
+		{
 			// 与原版 1.7 DrawHediffRow 一致：行内调试按钮只看 ShowDevGizmos
 			bool showDebugOptions = DebugSettings.ShowDevGizmos && Current.ProgramState == ProgramState.Playing;
 
@@ -596,6 +618,11 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			int totalHeight = Math.Max(bodyPartLabelHeight, hediffTotalHeight);
 			if (settings.horizontalSeparator)
 				totalHeight += settings.horizontalSeparatorHeight;
+
+			// 测量模式到这里就够了：行高已经确定，下面的高亮、分隔线、文字和图标都不需要跑。
+			if (!draw)
+				return totalHeight;
+
 			Rect wholeEntryRect = new Rect(0f, currentY, rowRect.width, totalHeight).Rounded();
 
 			if (settings.evenOddHighlights)
@@ -652,7 +679,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				GUI.color = Color.white;
 				currentY += Math.Max(bodyPartLabelHeight, hediffTotalHeight);
 				curY = currentY;
-				return;
+				return totalHeight;
 			}
 
 			int tooltipIDOffset = 0;
@@ -957,6 +984,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			}
 
 			curY = (float)currentY;
+			return totalHeight;
 		}
 
 		public static Hediff? GetReplacingPart(IEnumerable<Hediff> hediffs)

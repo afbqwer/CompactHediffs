@@ -17,6 +17,9 @@ namespace PeteTimesSix.CompactHediffs
             {
                 HarmonyInstance = new Harmony("PeteTimesSix.CompactHediffs");
                 HarmonyInstance.PatchAll();
+
+                // NHT 的补丁不能用特性声明：没装它时类型不存在，PatchAll 会直接报错。
+                ModCompat.NiceHealthTab.Init(HarmonyInstance);
             }
             catch (Exception ex)
             {

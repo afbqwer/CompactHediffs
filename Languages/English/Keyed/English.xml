@@ -8,6 +8,9 @@
 	<settings_IsEnabled>Enabled</settings_IsEnabled>
 	<settings_IsEnabled_tooltip>Enabled</settings_IsEnabled_tooltip>
 	
+	<settings_niceHealthTabCompat>Nice Health Tab compact rows</settings_niceHealthTabCompat>
+	<settings_niceHealthTabCompat_tooltip>Replace the hediff rows of Nice Health Tab's new health tab with this mod's compact rows. Nice Health Tab keeps its filters, disease prognosis, hit chance, armor and recovery-time panels, surgery previews and its own status/danger blocks.</settings_niceHealthTabCompat_tooltip>
+
 	<settings_replacingPartInBodypart>Inline augments</settings_replacingPartInBodypart>
 	<settings_replacingPartInBodypart_tooltip>Augments that replace a body part will be listed as part of their label</settings_replacingPartInBodypart_tooltip>
 	
