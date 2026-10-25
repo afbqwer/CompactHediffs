@@ -32,6 +32,12 @@
 	<settings_separatorNightMode>分隔线夜间模式</settings_separatorNightMode>
 	<settings_separatorNightMode_tooltip>分隔线使用黑色而非灰色</settings_separatorNightMode_tooltip>
 	
+	<settings_separatorSize>分隔线尺寸</settings_separatorSize>
+	<settings_separatorSize_tooltip>纵向、横向与内部三条分隔线共用的厚度（0~3 像素，0 表示看不见线）。</settings_separatorSize_tooltip>
+	
+	<settings_entrySpacing>Hediff 间隔</settings_entrySpacing>
+	<settings_entrySpacing_tooltip>在不同身体部位条目之间额外留出的空白（0~10 像素）。</settings_entrySpacing_tooltip>
+	
 	<settings_bodypartHealthbars>部位血条</settings_bodypartHealthbars>
 	<settings_bodypartHealthbars_tooltip>为身体部位绘制血条</settings_bodypartHealthbars_tooltip>
 	<settings_healthBarPosition>血条位置</settings_healthBarPosition>

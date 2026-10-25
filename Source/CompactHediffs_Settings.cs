@@ -47,6 +47,9 @@ namespace PeteTimesSix.CompactHediffs
         /// </summary>
         public bool niceHealthTabCompat = true;
 
+        /// <summary>Nice Health Tab 兼容：在全身失血提示下补一条失血严重度条。</summary>
+        public bool niceHealthTabBloodLossBar = true;
+
         public bool replacingPartInBodypart = true;
         public bool italicizeMissing = true;
         public bool verticalSeparator = true;
@@ -62,7 +65,7 @@ namespace PeteTimesSix.CompactHediffs
         public bool tendingIcons = true;
         public bool bloodlossSpecialHandling = true;
         /// <summary>true = 本模组的老行为，每条 hediff 各画一个状态图标；false = 相同图标只画一个。</summary>
-        public bool perHediffIcons = true;
+        public bool perHediffIcons = false;
 
         public BarPosition severityBarsPosition = BarPosition.Above;
         public SeverityBarMode severityBarMode = SeverityBarMode.LeftToRight;
@@ -75,9 +78,10 @@ namespace PeteTimesSix.CompactHediffs
         public int extraTabWidth = 100;
         public int extraTabHeight = 0;
 
-        public int verticalSeparatorWidth = 2;
-        public int horizontalSeparatorHeight = 2;
-        public int internalSeparatorHeight = 2;
+        /// <summary>纵向、横向、内部三条分隔线共用的厚度（0~3 像素）。</summary>
+        public int separatorSize = 2;
+        /// <summary>相邻身体部位条目之间的额外空白（0~10 像素）。</summary>
+        public int entrySpacing = 0;
         public int healthBarHeight = 4;
         public int internalBarHeight = 4;
 
@@ -86,6 +90,7 @@ namespace PeteTimesSix.CompactHediffs
             base.ExposeData();
             Scribe_Values.Look(ref _enabled, "isEnabled", true);
             Scribe_Values.Look(ref niceHealthTabCompat, "niceHealthTabCompat", true);
+            Scribe_Values.Look(ref niceHealthTabBloodLossBar, "niceHealthTabBloodLossBar", true);
 
             Scribe_Values.Look(ref replacingPartInBodypart, "replacingPartInBodypart", true);
             Scribe_Values.Look(ref italicizeMissing, "italicizeMissing", true);
@@ -99,11 +104,13 @@ namespace PeteTimesSix.CompactHediffs
             Scribe_Values.Look(ref healtbarsBarsPosition, "healtbarsBarsPosition", BarPosition.Above);
             Scribe_Values.Look(ref bleedingIcons, "bleedingIcons", true);
             Scribe_Values.Look(ref tendingIcons, "tendingIcons", true);
-            Scribe_Values.Look(ref perHediffIcons, "perHediffIcons", true);
+            Scribe_Values.Look(ref perHediffIcons, "perHediffIcons", false);
             Scribe_Values.Look(ref bloodlossSpecialHandling, "bloodlossSpecialHandling", true);
 
             Scribe_Values.Look(ref extraTabWidth, "extraTabWidth", 100);
             Scribe_Values.Look(ref extraTabHeight, "extraTabHeight", 0);
+            Scribe_Values.Look(ref separatorSize, "separatorSize", 2);
+            Scribe_Values.Look(ref entrySpacing, "entrySpacing", 0);
 
             Scribe_Values.Look(ref severityBarsPosition, "severityBarsPosition", BarPosition.Above);
             Scribe_Values.Look(ref severityBarMode, "severityBarMode", SeverityBarMode.LeftToRight);
@@ -212,6 +219,26 @@ namespace PeteTimesSix.CompactHediffs
                 extraTabWidth = newWidth;
                 extraTabHeight = newHeight;
                 ITab_Pawn_Health_Patches.SetExtraSize(extraTabWidth, extraTabHeight);
+            }
+
+            listingStandardWide.GapLine();
+
+            Rect separatorSizeLabelRect = listingStandardWide.GetRect(Text.LineHeight);
+            Widgets.Label(separatorSizeLabelRect, $"{"settings_separatorSize".Translate()}: {separatorSize}px");
+            TooltipHandler.TipRegion(separatorSizeLabelRect, "settings_separatorSize_tooltip".Translate());
+            int newSeparatorSize = (int)listingStandardWide.Slider(separatorSize, 0, 3);
+
+            Rect entrySpacingLabelRect = listingStandardWide.GetRect(Text.LineHeight);
+            Widgets.Label(entrySpacingLabelRect, $"{"settings_entrySpacing".Translate()}: {entrySpacing}px");
+            TooltipHandler.TipRegion(entrySpacingLabelRect, "settings_entrySpacing_tooltip".Translate());
+            int newEntrySpacing = (int)listingStandardWide.Slider(entrySpacing, 0, 10);
+
+            if (newSeparatorSize != separatorSize || newEntrySpacing != entrySpacing)
+            {
+                separatorSize = newSeparatorSize;
+                entrySpacing = newEntrySpacing;
+                // NHT 的行高和缓存签名都依赖这两项，通知它重建列表
+                ModCompat.NiceHealthTab.NotifySettingsChanged();
             }
 
             listingStandardWide.End();

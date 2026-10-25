@@ -24,6 +24,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 		public static readonly Color CyanWhite = new Color(0.8f, 1.0f, 1.0f, 1f);
 		public static readonly Color BluishGreen = new Color(0.0f, 1.0f, 0.4f, 1f);
 		public static readonly Color MissingBodyPart = new Color(0.15f, 0.0f, 0.0f, 1f);
+		public static readonly Color ToxicBuildupBar = new Color(0.6f, 1.0f, 0.6f, 1f);
 
 		public static readonly int IconHeight = 20;
 		public static readonly int DefaultIconHeight = 18;
@@ -526,7 +527,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			// 行高预估和实际绘制必须用同一个 hediff 列宽，否则 Text.CalcHeight 会在换行边界上差一行。
 			int bodyPartColumnWidth = (int)(rowRect.width * 0.375f);
 			int column_bodypartWidth = settings.verticalSeparator
-				? bodyPartColumnWidth + settings.verticalSeparatorWidth
+				? bodyPartColumnWidth + settings.separatorSize
 				: bodyPartColumnWidth;
 
 			BodyPartRecord part = diffs.First().Part;
@@ -590,7 +591,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				hediffTotalHeight += textHeight;
 
 				if (settings.internalSeparator && i < groupings.Count - 1)
-					hediffTotalHeight += settings.internalSeparatorHeight;
+					hediffTotalHeight += settings.separatorSize;
 
 				if (barsEnabled && GroupMayDrawBars(representativeHediff))
 				{
@@ -617,7 +618,9 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 			int totalHeight = Math.Max(bodyPartLabelHeight, hediffTotalHeight);
 			if (settings.horizontalSeparator)
-				totalHeight += settings.horizontalSeparatorHeight;
+				totalHeight += settings.separatorSize;
+			// 条目之间的额外空白：量在行高里，绘制时也照常推进 curY
+			totalHeight += settings.entrySpacing;
 
 			// 测量模式到这里就够了：行高已经确定，下面的高亮、分隔线、文字和图标都不需要跑。
 			if (!draw)
@@ -635,16 +638,16 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			if (settings.verticalSeparator)
 			{
 				GUI.color = separatorColor;
-				Rect verticalSeparatorRect = new Rect(bodyPartColumnWidth, currentY, settings.verticalSeparatorWidth, totalHeight).Rounded();
+				Rect verticalSeparatorRect = new Rect(bodyPartColumnWidth, currentY, settings.separatorSize, totalHeight).Rounded();
 				GUI.DrawTexture(verticalSeparatorRect, TexUI.FastFillTex);
 			}
 
 			if (settings.horizontalSeparator)
 			{
 				GUI.color = separatorColor;
-				Rect horizontalSeparatorRect = new Rect(0, currentY, rowRect.width, settings.horizontalSeparatorHeight).Rounded();
+				Rect horizontalSeparatorRect = new Rect(0, currentY, rowRect.width, settings.separatorSize).Rounded();
 				GUI.DrawTexture(horizontalSeparatorRect, TexUI.FastFillTex);
-				currentY += settings.horizontalSeparatorHeight;
+				currentY += settings.separatorSize;
 			}
 
 			if (settings.bodypartHealthbars && part != null)
@@ -677,7 +680,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			if (IsRowOutsideViewport(currentY, totalHeight))
 			{
 				GUI.color = Color.white;
-				currentY += Math.Max(bodyPartLabelHeight, hediffTotalHeight);
+				currentY += Math.Max(bodyPartLabelHeight, hediffTotalHeight) + settings.entrySpacing;
 				curY = currentY;
 				return totalHeight;
 			}
@@ -963,15 +966,15 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 				if (settings.internalSeparator && i < groupings.Count - 1)
 				{
-					Rect internalSeparatorRect = new Rect(column_bodypartWidth, currentY + innerY, (rowRect.width - column_bodypartWidth), settings.internalSeparatorHeight).Rounded();
+					Rect internalSeparatorRect = new Rect(column_bodypartWidth, currentY + innerY, (rowRect.width - column_bodypartWidth), settings.separatorSize).Rounded();
 					GUI.color = separatorColor;
 					GUI.DrawTexture(internalSeparatorRect, TexUI.FastFillTex);
-					innerY += settings.internalSeparatorHeight;
-					fullHediffRect.height += settings.internalSeparatorHeight;
+					innerY += settings.separatorSize;
+					fullHediffRect.height += settings.separatorSize;
 				}
 			}
 			GUI.color = Color.white;
-			currentY += Math.Max(bodyPartLabelHeight, hediffTotalHeight);
+			currentY += Math.Max(bodyPartLabelHeight, hediffTotalHeight) + settings.entrySpacing;
 
 			if (canEntryBeClicked != null && entryClicked != null && Mouse.IsOver(wholeEntryRect))
 			{
@@ -1404,6 +1407,46 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			return ShouldDrawSeverityBar(settings, hediff, out _, out _) ? settings.internalBarHeight : 0;
 		}
 
+		/// <summary>
+		/// Nice Health Tab 危险的失血块用：这条失血条会画出来时返回条高，否则 0。
+		/// 判断与 <see cref="DrawSeverityBar"/> 完全一致，NHT 用它来决定要多留多少行高。
+		/// </summary>
+		public static int GetBloodLossBarHeight(Pawn pawn)
+		{
+			if (pawn == null || pawn.health == null || pawn.health.hediffSet == null)
+				return 0;
+
+			var settings = CompactHediffsMod.Settings;
+			if (settings == null)
+				return 0;
+
+			Hediff? bloodLoss = pawn.health.hediffSet.GetFirstHediffOfDef(HediffDefOf.BloodLoss);
+			if (bloodLoss == null)
+				return 0;
+
+			return ShouldDrawSeverityBar(settings, bloodLoss, out _, out _) ? settings.internalBarHeight : 0;
+		}
+
+		/// <summary>
+		/// 在任意矩形里画一条失血严重度条（NHT 的全身失血提示用）。
+		/// <paramref name="colorOverride"/> 用于 NHT 的异色血液（例如 neutro 血液），为 null 时沿用本模组的失血配色。
+		/// </summary>
+		public static int DrawBloodLossBar(Rect barRect, Pawn pawn, Color? colorOverride = null)
+		{
+			if (pawn == null || pawn.health == null || pawn.health.hediffSet == null)
+				return 0;
+
+			var settings = CompactHediffsMod.Settings;
+			if (settings == null)
+				return 0;
+
+			Hediff? bloodLoss = pawn.health.hediffSet.GetFirstHediffOfDef(HediffDefOf.BloodLoss);
+			if (bloodLoss == null)
+				return 0;
+
+			return DrawSeverityBar(settings, barRect, bloodLoss, colorOverride);
+		}
+
 		/// <summary>累计治疗条同理：只有 tendDuration 配置了 disappearsAtTotalTendQuality 才有一条。</summary>
 		private static bool ShouldDrawCumulativeBar(CompactHediffs_Settings settings, Hediff hediff)
 		{
@@ -1420,7 +1463,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			return ShouldDrawCumulativeBar(settings, hediff) ? settings.internalBarHeight : 0;
 		}
 
-		private static int DrawSeverityBar(CompactHediffs_Settings settings, Rect barRect, Hediff hediff)
+		private static int DrawSeverityBar(CompactHediffs_Settings settings, Rect barRect, Hediff hediff, Color? colorOverride = null)
 		{
 			if (!ShouldDrawSeverityBar(settings, hediff, out float severityFraction, out float immunityFraction))
 				return 0;
@@ -1430,7 +1473,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 			var tendDurationComp = hediff.TryGetComp<HediffComp_TendDuration>();
 
-			Color hediffColor = GetHediffColor(settings, hediff);
+			Color hediffColor = colorOverride ?? GetHediffColor(settings, hediff);
 
 			GUI.color = Color.black;
 			GUI.DrawTexture(barRect, Textures.translucentWhite);
@@ -1447,6 +1490,13 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			Texture2D commonTexture = TexUI.FastFillTex;
 			Texture2D severityTexture = Textures.Bar_Infected;
 			Texture2D immunityTexture = Textures.Bar_Pill;
+
+			// 毒素积累条固定用浅绿色。原版 LabelColor 偏暗，而且默认开启的高对比模式会把严重度段画成红色。
+			if (hediff.def == HediffDefOf.ToxicBuildup)
+			{
+				commonColor = ToxicBuildupBar;
+				severityColor = ToxicBuildupBar;
+			}
 
 			switch (settings.severityBarMode)
 			{

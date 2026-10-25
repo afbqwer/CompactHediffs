@@ -32,6 +32,12 @@
 	<settings_separatorNightMode>Separator night mode</settings_separatorNightMode>
 	<settings_separatorNightMode_tooltip>Separators are black instead of grey</settings_separatorNightMode_tooltip>
 	
+	<settings_separatorSize>Separator size</settings_separatorSize>
+	<settings_separatorSize_tooltip>Thickness shared by the vertical, horizontal and internal separators (0-3 px; 0 hides the lines).</settings_separatorSize_tooltip>
+	
+	<settings_entrySpacing>Hediff spacing</settings_entrySpacing>
+	<settings_entrySpacing_tooltip>Extra blank space between body part entries (0-10 px).</settings_entrySpacing_tooltip>
+	
 	<settings_bodypartHealthbars>Health bars</settings_bodypartHealthbars>
 	<settings_bodypartHealthbars_tooltip>Draw health bars for body parts</settings_bodypartHealthbars_tooltip>
 	<settings_healthBarPosition>Health bar position</settings_healthBarPosition>

@@ -437,9 +437,8 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
                 hash = hash * 31 + (s.showHiddenProgressConditions ? 1 : 0);
                 hash = hash * 31 + (int)s.severityBarsPosition;
                 hash = hash * 31 + (int)s.severityBarMode;
-                hash = hash * 31 + s.verticalSeparatorWidth;
-                hash = hash * 31 + s.horizontalSeparatorHeight;
-                hash = hash * 31 + s.internalSeparatorHeight;
+                hash = hash * 31 + s.separatorSize;
+                hash = hash * 31 + s.entrySpacing;
                 hash = hash * 31 + s.internalBarHeight;
 
                 // 语言变了文字宽高也会变；NHT 自己的签名里没有它
