@@ -44,7 +44,7 @@
 	<settings_tendingIcons_tooltip>Customized icons depending on threatment quality replace the vanilla one</settings_tendingIcons_tooltip>
 	
 	<settings_perHediffIcons>An icon per condition</settings_perHediffIcons>
-	<settings_perHediffIcons_tooltip>Draw one state icon for every condition of a stack instead of one per distinct icon. Turning this off makes large stacks of similar wounds much cheaper to draw.</settings_perHediffIcons_tooltip>
+	<settings_perHediffIcons_tooltip>Draw one state icon for every condition of a stack. Turning this off caps a stack at 20 icons, split by how many of each kind there are (30 low-bleed plus 20 medium-bleed becomes 12 and 8), with at least one of each kind. Stacks of 20 icons or fewer look the same either way.</settings_perHediffIcons_tooltip>
 	
 	
 	<settings_bloodlossSpecialHandling>Custom bloodloss handling</settings_bloodlossSpecialHandling>

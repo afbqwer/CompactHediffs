@@ -44,7 +44,7 @@
 	<settings_tendingIcons_tooltip>用随治疗质量变化的自定义图标替换原版图标</settings_tendingIcons_tooltip>
 	
 	<settings_perHediffIcons>每条状态各显示一个图标</settings_perHediffIcons>
-	<settings_perHediffIcons_tooltip>堆叠的多条状态会为每一条各画一个状态图标，而不是每种图标只画一个。关掉后，同部位大量同类伤口会明显更省性能。</settings_perHediffIcons_tooltip>
+	<settings_perHediffIcons_tooltip>堆叠的多条状态会为每一条各画一个状态图标。关掉后每组最多画 20 个，按各自数量比例分配（例如 30 条轻微流血 + 20 条中度流血 → 12 个和 8 个），每种图标至少保留一个；图标不足 20 个时两种模式表现相同。</settings_perHediffIcons_tooltip>
 	
 	<settings_bloodlossSpecialHandling>失血特殊显示</settings_bloodlossSpecialHandling>
 	<settings_bloodlossSpecialHandling_tooltip>对失血做特殊处理（颜色随严重程度变化，闪烁速度随出血速度变化）</settings_bloodlossSpecialHandling_tooltip>

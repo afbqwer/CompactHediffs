@@ -84,12 +84,26 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			public float BleedRate;
 			/// <summary>排序用：包扎图标取治疗质量、流血图标取流血速度。</summary>
 			public float SortKey;
+			/// <summary>这种图标代表多少条 hediff（按比例分配时当权重用）。</summary>
+			public int Weight;
+			/// <summary>实际要画几个。1 = 每条一个；压缩后由 <see cref="AllocateIconCounts"/> 填。</summary>
+			public int Count;
+		}
+
+		/// <summary>一个分组最多画多少个图标。</summary>
+		private const int MaxIconsPerGroup = 20;
+
+		private struct IconSlot
+		{
+			public List<IconEntry> List;
+			public int Index;
 		}
 
 		// 图标收集用的复用缓冲。UI 绘制是单线程的，且这些列表在同一轮迭代内立刻消费掉。
 		private static readonly List<IconEntry> tmpStateIcons = new List<IconEntry>();
 		private static readonly List<IconEntry> tmpTendedIcons = new List<IconEntry>();
 		private static readonly List<IconEntry> tmpBleedingIcons = new List<IconEntry>();
+		private static readonly List<IconSlot> tmpIconSlots = new List<IconSlot>();
 
 		private static readonly Comparison<IconEntry> iconSortKeyDescending = CompareIconSortKey;
 
@@ -112,8 +126,8 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 		private const int CalcHeightCacheLimit = 2048;
 
-		/// <summary>同一分组最多列出的 tooltip 条数，其余折成“……另有 N 条”。</summary>
-		private const int MaxHediffTooltips = 10;
+		/// <summary>同一分组最多列出的 tooltip 条数，其余折成“……另有 N 条”。再多屏幕就放不下了。</summary>
+		private const int MaxHediffTooltips = 6;
 
 		private static bool calcHeightEpochValid;
 		private static GameFont calcHeightFont;
@@ -657,8 +671,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 					widthAccumulator += iconRect.width;
 				}
 
-				// 图标一次收集好：贴图与颜色都在收集阶段定完，相同贴图自动去重
-				// （同一部位几十条同类伤口原来会画几十个图标，现在最多 6 个）。
+				// 图标一次收集好：贴图、颜色、该画几个都在收集阶段定完
 				CollectIconHediffs(grouping, settings);
 
 				//draw non-injury icons first
@@ -668,45 +681,47 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 					foreach (IconEntry icon in tmpStateIcons)
 					{
 						GUI.color = icon.Color;
-						Rect iconRect = new Rect(rowRect.width - (widthAccumulator + DefaultIconHeight), fullHediffRect.y + defaultIconOffset, DefaultIconHeight, DefaultIconHeight).Rounded();
-						GUI.DrawTexture(iconRect, icon.Texture);
-						widthAccumulator += iconRect.width * iconOverlap;
+						for (int k = 0; k < icon.Count; k++)
+						{
+							Rect iconRect = new Rect(rowRect.width - (widthAccumulator + DefaultIconHeight), fullHediffRect.y + defaultIconOffset, DefaultIconHeight, DefaultIconHeight).Rounded();
+							GUI.DrawTexture(iconRect, icon.Texture);
+							widthAccumulator += iconRect.width * iconOverlap;
+						}
 					}
 				}
 				//draw tended injuries
 				foreach (IconEntry icon in tmpTendedIcons)
 				{
 					GUI.color = icon.Color;
-					Rect iconRect;
-					if (settings.tendingIcons)
+					for (int k = 0; k < icon.Count; k++)
 					{
-						iconRect = new Rect(rowRect.width - (widthAccumulator + TendIconWidth), fullHediffRect.y + iconOffset, TendIconWidth, IconHeight).Rounded();
+						Rect iconRect = settings.tendingIcons
+							? new Rect(rowRect.width - (widthAccumulator + TendIconWidth), fullHediffRect.y + iconOffset, TendIconWidth, IconHeight).Rounded()
+							: new Rect(rowRect.width - (widthAccumulator + IconHeight), fullHediffRect.y + iconOffset, IconHeight, IconHeight).Rounded();
 						GUI.DrawTexture(iconRect, icon.Texture);
+						widthAccumulator += iconRect.width * iconOverlap;
 					}
-					else
-					{
-						iconRect = new Rect(rowRect.width - (widthAccumulator + IconHeight), fullHediffRect.y + iconOffset, IconHeight, IconHeight).Rounded();
-						GUI.DrawTexture(iconRect, icon.Texture);
-					}
-					widthAccumulator += iconRect.width * iconOverlap;
 				}
 				//draw bleeding injuries
 				GUI.color = Color.white;
 				foreach (IconEntry icon in tmpBleedingIcons)
 				{
-					Rect iconRect;
-					if (settings.bleedingIcons)
+					for (int k = 0; k < icon.Count; k++)
 					{
-						iconRect = new Rect(rowRect.width - (widthAccumulator + BleedIconWidth), fullHediffRect.y + iconOffset, BleedIconWidth, IconHeight).Rounded();
-						GUI.color = icon.Color;
-						GUI.DrawTexture(iconRect, icon.Texture);
+						Rect iconRect;
+						if (settings.bleedingIcons)
+						{
+							iconRect = new Rect(rowRect.width - (widthAccumulator + BleedIconWidth), fullHediffRect.y + iconOffset, BleedIconWidth, IconHeight).Rounded();
+							GUI.color = icon.Color;
+							GUI.DrawTexture(iconRect, icon.Texture);
+						}
+						else
+						{
+							iconRect = new Rect(rowRect.width - (widthAccumulator + IconHeight), fullHediffRect.y + iconOffset, IconHeight, IconHeight).Rounded();
+							GUI.DrawTexture(iconRect.ContractedBy(GenMath.LerpDouble(0f, 0.6f, 5f, 0f, Mathf.Min(icon.BleedRate, 1f))), Textures.Vanilla_BleedingIcon);
+						}
+						widthAccumulator += iconRect.width * iconOverlap;
 					}
-					else
-					{
-						iconRect = new Rect(rowRect.width - (widthAccumulator + IconHeight), fullHediffRect.y + iconOffset, IconHeight, IconHeight).Rounded();
-						GUI.DrawTexture(iconRect.ContractedBy(GenMath.LerpDouble(0f, 0.6f, 5f, 0f, Mathf.Min(icon.BleedRate, 1f))), Textures.Vanilla_BleedingIcon);
-					}
-					widthAccumulator += iconRect.width * iconOverlap;
 				}
 
 				//draw other mod icon
@@ -855,9 +870,9 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			if (showDebugOptions)
 				iconsWidth += DevRemoveButtonWidth;
 
-			iconsWidth += tmpStateIcons.Count * DefaultIconHeight;
-			iconsWidth += tmpTendedIcons.Count * (settings.tendingIcons ? TendIconWidth : IconHeight);
-			iconsWidth += tmpBleedingIcons.Count * (settings.bleedingIcons ? BleedIconWidth : IconHeight);
+			iconsWidth += TotalIconCount(tmpStateIcons) * DefaultIconHeight;
+			iconsWidth += TotalIconCount(tmpTendedIcons) * (settings.tendingIcons ? TendIconWidth : IconHeight);
+			iconsWidth += TotalIconCount(tmpBleedingIcons) * (settings.bleedingIcons ? BleedIconWidth : IconHeight);
 
 			if (SmartMedicine.Active)
 				iconsWidth += SmartMedicineIconWidth;
@@ -881,9 +896,6 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 			bool customTendingIcons = settings.tendingIcons;
 			bool customBleedingIcons = settings.bleedingIcons;
-			// 本模组的老行为是“每条 hediff 一个图标”（堆叠时能看出每一条各自的治疗质量/流血程度）。
-			// 关掉后按贴图去重：治疗图标只有 6 档、流血图标 6 档，所以上限是 6 个而不是 N 个。
-			bool dedupe = !settings.perHediffIcons;
 
 			foreach (Hediff hediff in grouping)
 			{
@@ -895,27 +907,31 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 					if (stateIcon.Texture == Textures.Vanilla_TendedIcon_Well_Injury)
 					{
 						float quality = hediff.TryGetComp<HediffComp_TendDuration>()?.tendQuality ?? -1f;
-						AddIcon(tmpTendedIcons, new IconEntry
+						tmpTendedIcons.Add(new IconEntry
 						{
 							Texture = customTendingIcons ? TendingIconFor(quality) : stateIcon.Texture,
 							Color = stateIcon.Color,
 							SortKey = quality,
-						}, dedupe);
+							Weight = 1,
+							Count = 1,
+						});
 					}
 					else
 					{
-						AddIcon(tmpStateIcons, new IconEntry
+						tmpStateIcons.Add(new IconEntry
 						{
 							Texture = stateIcon.Texture,
 							Color = stateIcon.Color,
-						}, dedupe);
+							Weight = 1,
+							Count = 1,
+						});
 					}
 				}
 
 				if (hediff.Bleeding)
 				{
 					float bleedRate = hediff.BleedRate;
-					AddIcon(tmpBleedingIcons, new IconEntry
+					tmpBleedingIcons.Add(new IconEntry
 					{
 						Texture = customBleedingIcons ? BleedingIconFor(bleedRate) : Textures.Vanilla_BleedingIcon,
 						Color = customBleedingIcons
@@ -923,7 +939,9 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 							: Color.white,
 						BleedRate = bleedRate,
 						SortKey = bleedRate,
-					}, dedupe);
+						Weight = 1,
+						Count = 1,
+					});
 				}
 			}
 
@@ -932,20 +950,120 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				tmpTendedIcons.Sort(iconSortKeyDescending);
 			if (tmpBleedingIcons.Count > 1)
 				tmpBleedingIcons.Sort(iconSortKeyDescending);
+
+			// “每条状态各一个图标”是本模组的老行为，直接画；关掉后按比例压缩到上限
+			if (!settings.perHediffIcons)
+				CompressIcons();
 		}
 
-		private static void AddIcon(List<IconEntry> list, IconEntry entry, bool dedupe)
+		/// <summary>
+		/// 把“每条 hediff 一个图标”压缩成“最多 <see cref="MaxIconsPerGroup"/> 个”，
+		/// 各图标按数量比例分配，且每种至少保留 1 个。
+		/// 例：30 个流血_0 + 20 个流血_1 → 12 : 8，正好是 3 : 2。
+		/// 分配用 D'Hondt 法：每轮把下一个名额给 “Weight / (已分配 + 1)” 最大的那种，
+		/// 天然满足整数、总数恰好等于上限、且每种至少 1 个。
+		/// </summary>
+		private static void CompressIcons()
 		{
-			if (dedupe)
+			int total = tmpStateIcons.Count + tmpTendedIcons.Count + tmpBleedingIcons.Count;
+			if (total <= MaxIconsPerGroup)
+				return; // 本来就画得下，每条各画一个（这里不做任何合并）
+
+			MergeIconsByTexture(tmpStateIcons);
+			MergeIconsByTexture(tmpTendedIcons);
+			MergeIconsByTexture(tmpBleedingIcons);
+
+			tmpIconSlots.Clear();
+			int weightSum = 0;
+			AddIconSlots(tmpStateIcons, ref weightSum);
+			AddIconSlots(tmpTendedIcons, ref weightSum);
+			AddIconSlots(tmpBleedingIcons, ref weightSum);
+
+			int distinct = tmpIconSlots.Count;
+			if (distinct == 0)
+				return;
+
+			if (distinct >= MaxIconsPerGroup)
 			{
-				// 同贴图只留第一个。同贴图图标视觉完全一致，去掉不影响观感。
-				for (int i = 0; i < list.Count; i++)
-				{
-					if (list[i].Texture == entry.Texture)
-						return;
-				}
+				// 极端情况（不同图标就超过上限）：只留前 MaxIconsPerGroup 个，其余不画
+				for (int i = MaxIconsPerGroup; i < distinct; i++)
+					SetIconCount(tmpIconSlots[i], 0);
+				return;
 			}
-			list.Add(entry);
+
+			// 每种先给 1 个（保证“每种图标最少显示一个”）
+			int assigned = distinct;
+			while (assigned < MaxIconsPerGroup)
+			{
+				int bestIndex = 0;
+				float bestRatio = -1f;
+				for (int i = 0; i < distinct; i++)
+				{
+					IconSlot slot = tmpIconSlots[i];
+					IconEntry entry = slot.List[slot.Index];
+					float ratio = entry.Weight / (float)(entry.Count + 1);
+					if (ratio > bestRatio)
+					{
+						bestRatio = ratio;
+						bestIndex = i;
+					}
+				}
+
+				if (bestRatio < 0f)
+					break;
+
+				IconSlot bestSlot = tmpIconSlots[bestIndex];
+				IconEntry best = bestSlot.List[bestSlot.Index];
+				best.Count++;
+				bestSlot.List[bestSlot.Index] = best;
+				assigned++;
+			}
+		}
+
+		/// <summary>同贴图合并成一条：Weight 累加，Count 先置 1，SortKey 保留最严重的那个。</summary>
+		private static void MergeIconsByTexture(List<IconEntry> list)
+		{
+			for (int i = 0; i < list.Count; i++)
+			{
+				IconEntry merged = list[i];
+				for (int j = list.Count - 1; j > i; j--)
+				{
+					if (list[j].Texture != merged.Texture)
+						continue;
+
+					merged.Weight += list[j].Weight;
+					if (list[j].SortKey > merged.SortKey)
+						merged.SortKey = list[j].SortKey;
+					list.RemoveAt(j);
+				}
+				merged.Count = 1;
+				list[i] = merged;
+			}
+		}
+
+		private static void AddIconSlots(List<IconEntry> list, ref int total)
+		{
+			for (int i = 0; i < list.Count; i++)
+			{
+				total += list[i].Weight;
+				tmpIconSlots.Add(new IconSlot { List = list, Index = i });
+			}
+		}
+
+		private static void SetIconCount(IconSlot slot, int count)
+		{
+			IconEntry entry = slot.List[slot.Index];
+			entry.Count = count;
+			slot.List[slot.Index] = entry;
+		}
+
+		/// <summary>图标总个数（压缩后一个条目可能代表多个图标）。</summary>
+		private static int TotalIconCount(List<IconEntry> list)
+		{
+			int total = 0;
+			for (int i = 0; i < list.Count; i++)
+				total += list[i].Count;
+			return total;
 		}
 
 		private static int CompareIconSortKey(IconEntry a, IconEntry b)
