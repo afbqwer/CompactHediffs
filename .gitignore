@@ -6,7 +6,6 @@ Source/bin/
 # 游戏自动创建的 mod 资产包（上传 Workshop 时才生成，不需要追踪）
 Assets.zip*
 Assets/
-*.png
 
 # 编辑器 / 本地
 .vs/
