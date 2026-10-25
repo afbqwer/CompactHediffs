@@ -66,6 +66,9 @@
 	<settings_severityBarTextured>Bar textures</settings_severityBarTextured>
 	<settings_severityBarTextured_tooltip>Select bars use a texture.</settings_severityBarTextured_tooltip>
 	
+	<settings_sharpBarTextures>Sharp bar textures</settings_sharpBarTextures>
+	<settings_sharpBarTextures_tooltip>Use the pre-scaled 1:1 bar textures instead of downscaling the 4x oversized ones. Patterns stay crisp instead of being blurred by mipmap filtering. Only applies while the bar height is 4px (the default).</settings_sharpBarTextures_tooltip>
+	
 	<settings_severityBarHighContrast>Severity bars high contrast</settings_severityBarHighContrast>
 	<settings_severityBarHighContrast_tooltip>Severity/Immunity bar uses a high contrast color scheme (green is good, red is bad)</settings_severityBarHighContrast_tooltip>
 	

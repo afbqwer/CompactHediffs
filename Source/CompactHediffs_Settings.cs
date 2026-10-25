@@ -55,6 +55,7 @@ namespace PeteTimesSix.CompactHediffs
         public SeverityBarMode severityBarMode = SeverityBarMode.LeftToRight;
         public bool severityBarHighContrast = true;
         public bool severityBarTextured = true;
+        public bool sharpBarTextures = true;
         public bool showCumulativeThreatment = true;
         public bool showHiddenProgressConditions = false;
 
@@ -93,6 +94,7 @@ namespace PeteTimesSix.CompactHediffs
             Scribe_Values.Look(ref severityBarMode, "severityBarMode", SeverityBarMode.LeftToRight);
             Scribe_Values.Look(ref severityBarHighContrast, "severityBarHighContrast", true);
             Scribe_Values.Look(ref severityBarTextured, "severityBarTextured", true);
+            Scribe_Values.Look(ref sharpBarTextures, "sharpBarTextures", true);
             Scribe_Values.Look(ref showCumulativeThreatment, "showCumulativeThreatment", true);
             Scribe_Values.Look(ref showHiddenProgressConditions, "showHiddenProgressConditions", false);
         }
@@ -166,6 +168,7 @@ namespace PeteTimesSix.CompactHediffs
             listingStandardWide.EnumSelector(ref severityBarsPosition, "settings_severityBarPosition".Translate(), valueLabelPrefix: "BarPosition_", tooltip: "settings_severityBarPosition_tooltip".Translate());
 
             listingStandardWide.CheckboxLabeled("settings_severityBarTextured".Translate(), ref severityBarTextured, "settings_severityBarTextured_tooltip".Translate());
+            listingStandardWide.CheckboxLabeled("settings_sharpBarTextures".Translate(), ref sharpBarTextures, "settings_sharpBarTextures_tooltip".Translate());
             listingStandardWide.CheckboxLabeled("settings_severityBarHighContrast".Translate(), ref severityBarHighContrast, "settings_severityBarHighContrast_tooltip".Translate());
             listingStandardWide.CheckboxLabeled("settings_showCumulativeThreatment".Translate(), ref showCumulativeThreatment, "settings_showCumulativeThreatment_tooltip".Translate());
             listingStandardWide.CheckboxLabeled("settings_showHiddenProgressConditions".Translate(), ref showHiddenProgressConditions, "settings_showHiddenProgressConditions_tooltip".Translate());

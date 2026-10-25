@@ -36,6 +36,16 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
         public static readonly Texture2D Bar_Malnutrition = ContentFinder<Texture2D>.Get("bars/malnutrition");
         public static readonly Texture2D Bar_Cubes = ContentFinder<Texture2D>.Get("bars/cubes");
 
+        // 按 4px 条高预烘焙的 1:1 版本（原图是 16px 高，绘制时被压到 1/4，1.7 的 mip 采样会把它糊掉）。
+        // 尺寸：cubes 11x4 / dnatwist 28x4 / infected 13x4 / malnutrition 18x4 / pill 13x4 / pill_big 15x4 / ragged 13x4
+        public static readonly Texture2D Bar_Pill_1to1 = ContentFinder<Texture2D>.Get("bars/crisp/pill");
+        public static readonly Texture2D Bar_PillBig_1to1 = ContentFinder<Texture2D>.Get("bars/crisp/pill_big");
+        public static readonly Texture2D Bar_Ragged_1to1 = ContentFinder<Texture2D>.Get("bars/crisp/ragged");
+        public static readonly Texture2D Bar_Infected_1to1 = ContentFinder<Texture2D>.Get("bars/crisp/infected");
+        public static readonly Texture2D Bar_DNA_1to1 = ContentFinder<Texture2D>.Get("bars/crisp/dnatwist");
+        public static readonly Texture2D Bar_Malnutrition_1to1 = ContentFinder<Texture2D>.Get("bars/crisp/malnutrition");
+        public static readonly Texture2D Bar_Cubes_1to1 = ContentFinder<Texture2D>.Get("bars/crisp/cubes");
+
         static Textures()
         {
             // 1.7 的 IMGUI 通道用固定的 ClampToEdge 采样器，wrapMode 对它无效；

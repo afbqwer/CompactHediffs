@@ -903,15 +903,46 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 					immunityColor.a *= 0.75f;
 			}
 
-			DrawBarSegment(commonRect, commonTexture, commonColor, settings.internalBarHeight);
-			DrawBarSegment(commonRectMirror, commonTexture, commonColor, settings.internalBarHeight);
-			DrawBarSegment(severityRect, severityTexture, severityColor, settings.internalBarHeight);
-			DrawBarSegment(severityRectMirror, severityTexture, severityColor, settings.internalBarHeight);
-			DrawBarSegment(immunityRect, immunityTexture, immunityColor, settings.internalBarHeight);
-			DrawBarSegment(immunityRectMirror, immunityTexture, immunityColor, settings.internalBarHeight);
+			DrawBarSegment(commonRect, ResolveBarTexture(commonTexture, settings.internalBarHeight), commonColor, settings.internalBarHeight);
+			DrawBarSegment(commonRectMirror, ResolveBarTexture(commonTexture, settings.internalBarHeight), commonColor, settings.internalBarHeight);
+			DrawBarSegment(severityRect, ResolveBarTexture(severityTexture, settings.internalBarHeight), severityColor, settings.internalBarHeight);
+			DrawBarSegment(severityRectMirror, ResolveBarTexture(severityTexture, settings.internalBarHeight), severityColor, settings.internalBarHeight);
+			DrawBarSegment(immunityRect, ResolveBarTexture(immunityTexture, settings.internalBarHeight), immunityColor, settings.internalBarHeight);
+			DrawBarSegment(immunityRectMirror, ResolveBarTexture(immunityTexture, settings.internalBarHeight), immunityColor, settings.internalBarHeight);
 
 			GUI.color = Color.white;
 			return settings.internalBarHeight;
+		}
+
+		/// <summary>预烘焙 1:1 条纹理对应的条高（px）。条高不等于它时退回原始的 16px 贴图。</summary>
+		private const int BakedBarTextureHeight = 4;
+
+		/// <summary>
+		/// 条高恰好等于烘焙高度、且“锐化进度条纹理”打开时，换成 1:1 的贴图。
+		/// 此时每块绘制尺寸≈贴图像素尺寸，采样停在 mip 0，不会被 1.7 的 Linear+mip 采样器糊掉。
+		/// 非条纹理（<see cref="TexUI.FastFillTex"/> 等纯色）原样返回。
+		/// </summary>
+		private static Texture2D ResolveBarTexture(Texture2D texture, int barHeight)
+		{
+			if (!CompactHediffsMod.Settings.sharpBarTextures || barHeight != BakedBarTextureHeight)
+				return texture;
+
+			if (texture == Textures.Bar_Ragged)
+				return Textures.Bar_Ragged_1to1;
+			if (texture == Textures.Bar_Infected)
+				return Textures.Bar_Infected_1to1;
+			if (texture == Textures.Bar_Pill)
+				return Textures.Bar_Pill_1to1;
+			if (texture == Textures.Bar_PillBig)
+				return Textures.Bar_PillBig_1to1;
+			if (texture == Textures.Bar_Malnutrition)
+				return Textures.Bar_Malnutrition_1to1;
+			if (texture == Textures.Bar_Cubes)
+				return Textures.Bar_Cubes_1to1;
+			if (texture == Textures.Bar_DNA)
+				return Textures.Bar_DNA_1to1;
+
+			return texture;
 		}
 
 		/// <summary>
@@ -1018,8 +1049,8 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				immunityTexture = TexUI.FastFillTex;
 			}
 
-			DrawBarSegment(immunityRect, immunityTexture, immunityColor, settings.internalBarHeight);
-			DrawBarSegment(immunityRectMirror, immunityTexture, immunityColor, settings.internalBarHeight);
+			DrawBarSegment(immunityRect, ResolveBarTexture(immunityTexture, settings.internalBarHeight), immunityColor, settings.internalBarHeight);
+			DrawBarSegment(immunityRectMirror, ResolveBarTexture(immunityTexture, settings.internalBarHeight), immunityColor, settings.internalBarHeight);
 
 			GUI.color = Color.white;
 			return settings.internalBarHeight;
