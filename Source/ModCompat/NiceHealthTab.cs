@@ -71,6 +71,7 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
 
         private static FieldInfo? hoveredHediffField;
         private static FieldInfo? animatedRowHeightField;
+        private static FieldInfo? animatedRowGapAfterField;
 
         /// <summary>
         /// NHT 的 byPart 不含“全身”块（全身 hediff 走单独的列表），所以不能只靠它反查。
@@ -308,6 +309,12 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
                 var heightField = animatedRowHeightField
                     ??= AccessTools.Field(row.GetType(), "Height");
                 heightField?.SetValue(row, height);
+
+                // NHT 给每个部位块自带 2px GapAfter；本模组已有 entrySpacing 控制间距，
+                // 不置零的话两边会叠加，看起来就是“设置了间距但间隔还是偏大”。
+                var gapAfterField = animatedRowGapAfterField
+                    ??= AccessTools.Field(row.GetType(), "GapAfter");
+                gapAfterField?.SetValue(row, 0f);
             }
             catch (Exception ex)
             {
