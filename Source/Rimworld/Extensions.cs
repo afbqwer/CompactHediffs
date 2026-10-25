@@ -20,7 +20,13 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
             int num = 0;
             while (num < str.Length - 1 && str[num] == '<' && str[num + 1] != '/')
             {
-                num += str.Substring(num).IndexOf('>') + 1;
+                // 原来用 str.Substring(num).IndexOf('>')，每跳一个标签就拷一份子串
+                int close = str.IndexOf('>', num);
+                if (close < 0)
+                {
+                    return num;
+                }
+                num = close + 1;
             }
             return num;
         }

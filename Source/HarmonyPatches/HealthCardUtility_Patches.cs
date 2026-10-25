@@ -96,4 +96,25 @@ namespace PeteTimesSix.CompactHediffs.HarmonyPatches
             return false;
         }
     }
+
+    /// <summary>
+    /// 记录健康列表的可视区高度，供行绘制做滚动裁剪。
+    /// 列表本身就在滚动视图里，滚出屏幕的行每帧仍在做文本排版和进度条分块，hediff 一多就是主要开销。
+    /// </summary>
+    [HarmonyPatch(typeof(HealthCardUtility), "DrawHediffListing")]
+    public static class HealthCardUtility_DrawHediffListing
+    {
+        [HarmonyPrefix]
+        public static void Prefix(Rect rect)
+        {
+            if (CompactHediffsMod.Settings.Enabled && CustomHealthCardUtility.Available)
+                CustomHealthCardUtility.BeginListingViewport(rect.height);
+        }
+
+        [HarmonyPostfix]
+        public static void Postfix()
+        {
+            CustomHealthCardUtility.EndListingViewport();
+        }
+    }
 }

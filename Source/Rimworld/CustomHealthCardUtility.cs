@@ -48,10 +48,114 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 		private static GetTooltipDelegate? getTooltip;
 		private static GetListPriorityDelegate? getListPriority;
 
+		/// <summary>HealthCardUtility.scrollPosition，用于滚动裁剪；解析失败时不做裁剪。</summary>
+		private static AccessTools.FieldRef<Vector2>? scrollPositionField;
+
 		/// <summary>核心私有成员至少解析成功一个，才值得接管原版行绘制。</summary>
 		public static bool Available { get; private set; }
 
 		private static bool ShowHediffsDebugInfo => showHediffsDebugInfo != null && showHediffsDebugInfo.Invoke();
+
+		// ===== 性能相关（本项目每帧会走 Layout + Repaint 两遍，且每行都重复绘制） =====
+
+		/// <summary>
+		/// 单个分组的排版结果。测量阶段算一次、绘制阶段直接用，
+		/// 避免同一行在同一帧里把标签字符串、图标宽度、文本高度算两遍。
+		/// </summary>
+		private struct GroupLayout
+		{
+			public string Label;
+			public int IconsWidth;
+			public float IconOverlap;
+			public int TextHeight;
+			public int Count;
+		}
+
+		private static readonly List<GroupLayout> groupLayouts = new List<GroupLayout>();
+
+		// 图标收集用的复用缓冲。UI 绘制是单线程的，且这些列表在同一轮迭代内立刻消费掉。
+		private static readonly List<Hediff> tmpStateIconHediffs = new List<Hediff>();
+		private static readonly List<Hediff> tmpTendedInjuryHediffs = new List<Hediff>();
+		private static readonly List<Hediff> tmpBleedingHediffs = new List<Hediff>();
+
+		private static readonly Comparison<Hediff> tendQualityDescending = CompareTendQuality;
+		private static readonly Comparison<Hediff> bleedRateDescending = CompareBleedRate;
+
+		/// <summary>
+		/// Text.CalcHeight 的结果缓存。一次测量是整串逐字符走一遍排版（含富文本解析、字形步进查表），
+		/// 而健康面板每帧会把同一批标签测量好几遍（Layout 一遍、Repaint 一遍）。
+		/// 键是 (文本, 宽度)：高度只由它俩 + 字体决定，字体变了（字号/语言）整体清空。
+		/// </summary>
+		private static readonly Dictionary<(string Text, int Width), float> calcHeightCache =
+			new Dictionary<(string, int), float>();
+
+		private const int CalcHeightCacheLimit = 2048;
+
+		private static bool calcHeightEpochValid;
+		private static GameFont calcHeightFont;
+		private static float calcHeightFontSize = -1f;
+		private static LoadedLanguage? calcHeightLanguage;
+
+		// 身体部位标签里的 \b 正则原来每次 new Regex，改为按标签缓存（模板就那几个）。
+		private static readonly Dictionary<string, Regex> wordBoundaryRegexCache = new Dictionary<string, Regex>();
+
+		// 滚动裁剪：由 DrawHediffListing 的补丁在前后包一层（只在它内部绘制行，所以不需要帧号标记）。
+		private static bool viewportActive;
+		private static float viewportHeight;
+		private const float ViewportCullMargin = 128f;
+
+		/// <summary>进入 DrawHediffListing 时记录可视区高度（列表高度减去底部流血提示行）。</summary>
+		public static void BeginListingViewport(float listingHeight)
+		{
+			viewportActive = true;
+			viewportHeight = listingHeight - Text.LineHeight;
+		}
+
+		public static void EndListingViewport()
+		{
+			viewportActive = false;
+		}
+
+		/// <summary>整行（含身体部位标签）完全滚出可视区时返回 true，此时只需要累加高度、不需要绘制。</summary>
+		private static bool IsRowOutsideViewport(int rowY, int rowHeight)
+		{
+			if (!viewportActive || viewportHeight <= 0f || scrollPositionField == null)
+				return false;
+
+			float scrollY = scrollPositionField.Invoke().y;
+			if (float.IsNaN(scrollY))
+				return false;
+
+			return rowY + rowHeight < scrollY - ViewportCullMargin
+				|| rowY > scrollY + viewportHeight + ViewportCullMargin;
+		}
+
+		/// <summary>带缓存的 Text.CalcHeight。</summary>
+		private static float CalcHeightCached(string text, int width)
+		{
+			GameFont font = Text.Font;
+			float fontSize = Text.CurFontStyle.fontSize;
+			LoadedLanguage? language = LanguageDatabase.activeLanguage;
+
+			if (!calcHeightEpochValid || font != calcHeightFont || fontSize != calcHeightFontSize || !ReferenceEquals(language, calcHeightLanguage))
+			{
+				calcHeightCache.Clear();
+				calcHeightEpochValid = true;
+				calcHeightFont = font;
+				calcHeightFontSize = fontSize;
+				calcHeightLanguage = language;
+			}
+
+			var key = (text, width);
+			if (calcHeightCache.TryGetValue(key, out float height))
+				return height;
+
+			height = Text.CalcHeight(text, width);
+			// 满了就不再写入：继续用旧条目、宁可多算几次，也不要无限增长
+			if (calcHeightCache.Count < CalcHeightCacheLimit)
+				calcHeightCache[key] = height;
+			return height;
+		}
 
 		static CustomHealthCardUtility()
 		{
@@ -114,6 +218,12 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			else
 				Log.Error("[CompactHediffs] 未找到 HealthCardUtility.GetListPriority，部位排序将退化为默认顺序。");
 
+			var scrollPosition = AccessTools.Field(healthCardType, "scrollPosition");
+			if (scrollPosition != null)
+				scrollPositionField = AccessTools.StaticFieldRefAccess<Vector2>(scrollPosition);
+			else
+				Log.Warning("[CompactHediffs] 未找到 HealthCardUtility.scrollPosition，已关闭滚动裁剪（只影响性能，不影响显示）。");
+
 			// 三个成员都拿不到，说明原版私有 API 已经大改，别再硬接管绘制
 			Available = highlight != null || showHediffsDebugInfo != null || canEntryBeClicked != null;
 
@@ -143,10 +253,13 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			if (part != null && settings.replacingPartInBodypart)
 				replacingPart = GetReplacingPart(diffs);
 
-			string bodyPartText = MakeBodyPartText(pawn, part, replacingPart);
+			// 部位健康色只取一次：原来 MakeBodyPartText 和部位血条各调一次 GetPartConditionLabel（内含字符串拼接）
+			Color healthColor = part != null ? GetHealthColorForBodypart(pawn, part) : Color.white;
+
+			string bodyPartText = MakeBodyPartText(part, replacingPart, healthColor);
 
 			int bodypartLabelWidth = (int)Math.Max(bodyPartColumnWidth - IconHeight / 2f - rowLeftPad, 1f);
-			int bodyPartLabelHeight = (int)(Text.CalcHeight(bodyPartText, bodypartLabelWidth));
+			int bodyPartLabelHeight = (int)CalcHeightCached(bodyPartText, bodypartLabelWidth);
 			int hediffTotalHeight = 0;
 
 			List<IGrouping<HediffDef, Hediff>> groupings;
@@ -165,14 +278,22 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 					groupings = diffs.Where(x => x != replacingPart).GroupBy(x => x.def).ToList();
 			}
 
+			// 测量阶段顺手把每组的排版结果存下来，绘制阶段直接复用，
+			// 不再把标签字符串、图标宽度、文本高度算第二遍。
+			float hediffColumnWidthF = rowRect.width - column_bodypartWidth;
+			int halfHediffColumnWidth = (int)(hediffColumnWidthF / 2f);
+			bool barsEnabled = settings.severityBarMode != CompactHediffs_Settings.SeverityBarMode.Off;
+
+			groupLayouts.Clear();
 			for (int i = 0; i < groupings.Count; i++)
 			{
 				IGrouping<HediffDef, Hediff> grouping = groupings[i];
 				string hediffLabel = GenLabelForHediffGroup(grouping);
 				Hediff representativeHediff = grouping.First();
-				if (grouping.Count() > 1)
+				int groupCount = grouping.Count();
+				if (groupCount > 1)
 				{
-					hediffLabel = hediffLabel + " x" + grouping.Count().ToString();
+					hediffLabel = hediffLabel + " x" + groupCount.ToString();
 				}
 				if (settings.italicizeMissing && representativeHediff.def == HediffDefOf.MissingBodyPart)
 				{
@@ -180,18 +301,23 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				}
 
 				int iconsWidth = CalcIconsWidthForGrouping(grouping, showDebugOptions);
-				if (iconsWidth > (rowRect.width - column_bodypartWidth) / 2f)
+				float iconOverlap = 1f;
+				if (iconsWidth > halfHediffColumnWidth)
 				{
-					iconsWidth = (int)((rowRect.width - column_bodypartWidth) / 2f);
+					// 图标总宽超过半个 hediff 列时按比例压缩间距；测量和绘制必须用同一套取值
+					iconOverlap = halfHediffColumnWidth / (float)iconsWidth;
+					iconsWidth = halfHediffColumnWidth;
 				}
-				int hediffLabelWidth = (int)(rowRect.width - (column_bodypartWidth + iconsWidth));
+				int hediffLabelWidth = (int)(hediffColumnWidthF - iconsWidth);
 
-				hediffTotalHeight += (int)(Text.CalcHeight(hediffLabel, hediffLabelWidth));
+				int textHeight = (int)CalcHeightCached(hediffLabel, hediffLabelWidth);
+
+				hediffTotalHeight += textHeight;
 
 				if (settings.internalSeparator && i < groupings.Count - 1)
 					hediffTotalHeight += settings.internalSeparatorHeight;
 
-				if (settings.severityBarMode != CompactHediffs_Settings.SeverityBarMode.Off)
+				if (barsEnabled)
 				{
 					// 绘制时会遍历分组里的每一个 hediff，行高也必须逐个累加，
 					// 不能只看 grouping.First()（同种 hediff 堆叠时原来会少算 n-1 条）。
@@ -203,6 +329,15 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 							hediffTotalHeight += GetCumulativeBarHeight(settings, groupedHediff);
 					}
 				}
+
+				groupLayouts.Add(new GroupLayout
+				{
+					Label = hediffLabel,
+					IconsWidth = iconsWidth,
+					IconOverlap = iconOverlap,
+					TextHeight = textHeight,
+					Count = groupCount,
+				});
 			}
 
 			int totalHeight = Math.Max(bodyPartLabelHeight, hediffTotalHeight);
@@ -236,7 +371,6 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			{
 				Rect fullHealthPercentageRect = new Rect(0, currentY, bodyPartColumnWidth, settings.healthBarHeight).Rounded();
 
-				Color healthColor = GetHealthColorForBodypart(pawn, part);
 				float partMaxHealth = GetPartMaxHealth(pawn, part);
 				float partHealthFraction = partMaxHealth > 0f ? pawn.health.hediffSet.GetPartHealth(part) / partMaxHealth : 1f;
 
@@ -256,6 +390,17 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 						GUI.DrawTexture(healthPercentageRect, Textures.translucentWhite);
 					}
 				}
+			}
+
+			// 滚动裁剪：整行已经滚出可视区时，除了上面那几条几乎零成本的纯色矩形，
+			// 剩下的文本排版、进度条分块、图标按钮全都不用做（行高已经算完，curY 照常推进）。
+			// 这是“hediff 一多就卡”最主要的一块：一屏只看得到十几行，其余每行每帧都在白算。
+			if (IsRowOutsideViewport(currentY, totalHeight))
+			{
+				GUI.color = Color.white;
+				currentY += Math.Max(bodyPartLabelHeight, hediffTotalHeight);
+				curY = currentY;
+				return;
 			}
 
 			int tooltipIDOffset = 0;
@@ -301,38 +446,31 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 			GUI.color = Color.white;
 
+			int hediffColumnWidth = (int)hediffColumnWidthF;
+
 			for (int i = 0; i < groupings.Count; i++)
 			{
 				IGrouping<HediffDef, Hediff> grouping = groupings[i];
-				string hediffLabel = GenLabelForHediffGroup(grouping);
-				var hediffsByPriority = grouping
-					.OrderByDescending(x => x.TendableNow(true) ? x.TendPriority : -1)
-					.ToList();
+				// 标签、图标宽度、文本高度都来自测量阶段，不再重算
+				GroupLayout layout = groupLayouts[i];
+				string hediffLabel = layout.Label;
+				int iconsWidth = layout.IconsWidth;
+				float iconOverlap = layout.IconOverlap;
+				int hediffLabelWidth = (int)(hediffColumnWidthF - iconsWidth);
+				int hediffTextHeight = layout.TextHeight;
 
 				Hediff representativeHediff = grouping.First();
-				if (grouping.Count() > 1)
+
+				// SmartMedicine 只在它激活时才需要完整排序表，否则不为它付排序代价
+				List<Hediff>? hediffsByPriority = null;
+				if (SmartMedicine.Active)
 				{
-					hediffLabel = hediffLabel + " x" + grouping.Count().ToString();
-				}
-				if (settings.italicizeMissing && representativeHediff.def == HediffDefOf.MissingBodyPart)
-				{
-					hediffLabel = hediffLabel.ApplyTag("i");
+					hediffsByPriority = grouping
+						.OrderByDescending(x => x.TendableNow(true) ? x.TendPriority : -1)
+						.ToList();
 				}
 
-				int iconsWidth = CalcIconsWidthForGrouping(grouping, showDebugOptions);
-				float iconOverlap = 1f;
-				if (iconsWidth > (rowRect.width - column_bodypartWidth) / 2f)
-				{
-					iconOverlap = ((rowRect.width - column_bodypartWidth) / 2f) / (float)iconsWidth;
-					iconsWidth = (int)((rowRect.width - column_bodypartWidth) / 2f);
-				}
-				int hediffLabelWidth = (int)((rowRect.width - column_bodypartWidth) - iconsWidth);
-
-				int hediffTextHeight = (int)Text.CalcHeight(hediffLabel, hediffLabelWidth);
-
-				int hediffColumnWidth = (int)(rowRect.width - column_bodypartWidth);
-
-				if (settings.severityBarMode != CompactHediffs_Settings.SeverityBarMode.Off && settings.severityBarsPosition == CompactHediffs_Settings.BarPosition.Above)
+				if (barsEnabled && settings.severityBarsPosition == CompactHediffs_Settings.BarPosition.Above)
 				{
 					foreach (Hediff hediff in grouping)
 					{
@@ -381,7 +519,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				GUI.color = Color.white;
 				if (SmartMedicine.Active)
 				{
-					UI_SmartMedicine.AddSmartMedicineFloatMenuButton(fullHediffRect, hediffsByPriority);
+					UI_SmartMedicine.AddSmartMedicineFloatMenuButton(fullHediffRect, hediffsByPriority!);
 				}
 
 				float widthAccumulator = 0;
@@ -402,7 +540,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 						}
 						widthAccumulator += iconRect.width;
 					}
-					if (grouping.Count() == 1)
+					if (layout.Count == 1)
 					{
 						var singleHediff = grouping.First();
 						if (singleHediff.def.maxSeverity < float.MaxValue || singleHediff.def.lethalSeverity > 0f)
@@ -438,9 +576,12 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 					widthAccumulator += iconRect.width;
 				}
 
-				var hediffsWithStateIcon = hediffsByPriority.Where(x => x.StateIcon.HasValue);
+				// 图标一次收集成三个列表：原来这里连着 4 条 LINQ 链（Where/OrderByDescending），
+				// 每条都会新建迭代器，并且把 StateIcon（内部要遍历 comps）反复读好几遍。
+				CollectIconHediffs(grouping);
+
 				//draw non-injury icons first
-				foreach (Hediff localHediff in hediffsWithStateIcon.Where(x => x.StateIcon.Texture != Textures.Vanilla_TendedIcon_Well_Injury))
+				foreach (Hediff localHediff in tmpStateIconHediffs)
 				{
 					var hediffStateIcon = localHediff.StateIcon;
 					GUI.color = hediffStateIcon.Color;
@@ -450,7 +591,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 					widthAccumulator += iconRect.width * iconOverlap;
 				}
 				//draw tended injuries
-				foreach (Hediff localHediff in hediffsWithStateIcon.Where(x => x.StateIcon.Texture == Textures.Vanilla_TendedIcon_Well_Injury).OrderByDescending(x => x.TryGetComp<HediffComp_TendDuration>()?.tendQuality ?? -1f))
+				foreach (Hediff localHediff in tmpTendedInjuryHediffs)
 				{
 					var hediffStateIcon = localHediff.StateIcon;
 					GUI.color = hediffStateIcon.Color;
@@ -469,27 +610,20 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				}
 				//draw bleeding injuries
 				GUI.color = Color.white;
-				foreach (Hediff localHediff in hediffsByPriority.Where(x => x.Bleeding).OrderByDescending(x => x.BleedRate))
+				foreach (Hediff localHediff in tmpBleedingHediffs)
 				{
-					if (localHediff.Bleeding)
+					Rect iconRect;
+					if (settings.bleedingIcons)
 					{
-						Rect iconRect;
-						if (settings.bleedingIcons)
-						{
-							iconRect = new Rect(rowRect.width - (widthAccumulator + BleedIconWidth), fullHediffRect.y + iconOffset, BleedIconWidth, IconHeight).Rounded();
-							DrawCustomBleedIcon(iconRect, localHediff);
-						}
-						else
-						{
-							iconRect = new Rect(rowRect.width - (widthAccumulator + IconHeight), fullHediffRect.y + iconOffset, IconHeight, IconHeight).Rounded();
-							GUI.DrawTexture(iconRect.ContractedBy(GenMath.LerpDouble(0f, 0.6f, 5f, 0f, Mathf.Min(localHediff.BleedRate, 1f))), Textures.Vanilla_BleedingIcon);
-						}
-						widthAccumulator += iconRect.width * iconOverlap;
+						iconRect = new Rect(rowRect.width - (widthAccumulator + BleedIconWidth), fullHediffRect.y + iconOffset, BleedIconWidth, IconHeight).Rounded();
+						DrawCustomBleedIcon(iconRect, localHediff);
 					}
 					else
 					{
-						break;
+						iconRect = new Rect(rowRect.width - (widthAccumulator + IconHeight), fullHediffRect.y + iconOffset, IconHeight, IconHeight).Rounded();
+						GUI.DrawTexture(iconRect.ContractedBy(GenMath.LerpDouble(0f, 0.6f, 5f, 0f, Mathf.Min(localHediff.BleedRate, 1f))), Textures.Vanilla_BleedingIcon);
 					}
+					widthAccumulator += iconRect.width * iconOverlap;
 				}
 
 				//draw other mod icon
@@ -497,7 +631,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				if (SmartMedicine.Active && SmartMedicine.GetElementsByList != null)
 				{
 					Rect iconRect = new Rect(rowRect.width - (widthAccumulator + SmartMedicineIconWidth), fullHediffRect.y + iconOffset, rowRect.width, SmartMedicineIconHeight).Rounded();
-					UI_SmartMedicine.DrawSmartMedicineIcon(iconRect, hediffsByPriority, ref widthAccumulator, SmartMedicineIconWidth);
+					UI_SmartMedicine.DrawSmartMedicineIcon(iconRect, hediffsByPriority!, ref widthAccumulator, SmartMedicineIconWidth);
 				}
 				if (ChooseYourMedicine.Active && ChooseYourMedicine.DrawButtonToAssignMedManually != null)
 				{
@@ -535,8 +669,10 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			GUI.color = Color.white;
 			currentY += Math.Max(bodyPartLabelHeight, hediffTotalHeight);
 
-			if (canEntryBeClicked != null && entryClicked != null)
+			if (canEntryBeClicked != null && entryClicked != null && Mouse.IsOver(wholeEntryRect))
 			{
+				// 原版无条件调用 CanEntryBeClicked：它会遍历 Find.BattleLog 里所有战斗的所有条目，
+				// 而 ButtonInvisible 在鼠标不在行内时本来就是空操作，所以先判 hover 再问，结果一致但便宜得多。
 				if (Widgets.ButtonInvisible(wholeEntryRect, canEntryBeClicked(diffs, pawn)))
 				{
 					entryClicked(diffs, pawn);
@@ -564,7 +700,8 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			return null;
 		}
 
-		public static string MakeBodyPartText(Pawn pawn, BodyPartRecord? part, Hediff? replacingPart)
+		/// <summary>bodyPart 为 null 时表示全身。healthColor 由调用方取一次传进来，避免重复调用 GetPartConditionLabel。</summary>
+		public static string MakeBodyPartText(BodyPartRecord? part, Hediff? replacingPart, Color healthColor)
 		{
 			string bodyPartText;
 			if (part == null)
@@ -573,11 +710,11 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			}
 			else
 			{
-				Color healthColor = GetHealthColorForBodypart(pawn, part);
 				if (replacingPart != null)
 				{
 					var replacingPartColorLabel = ColoredText.Colorize(replacingPart.Label, replacingPart.def.defaultLabelColor);
-					var regex = new Regex(@"\b" + part.def.label + @"\b");
+					// 原来每次调用都 new Regex（要重新解析模式），按标签缓存一份就够了
+					var regex = GetWordBoundaryRegex(part.def.label);
 					if (regex.IsMatch(replacingPart.Label) && regex.IsMatch(part.Label))
 					{
 						replacingPartColorLabel = replacingPartColorLabel.Replace(part.def.label, ColoredText.Colorize(part.def.label, healthColor));
@@ -598,6 +735,19 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			return bodyPartText;
 		}
 
+		private static Regex GetWordBoundaryRegex(string label)
+		{
+			if (wordBoundaryRegexCache.TryGetValue(label, out Regex? cached))
+				return cached;
+
+			if (wordBoundaryRegexCache.Count >= 64)
+				wordBoundaryRegexCache.Clear();
+
+			var regex = new Regex(@"\b" + label + @"\b");
+			wordBoundaryRegexCache[label] = regex;
+			return regex;
+		}
+
 		private static float GetPartMaxHealth(Pawn pawn, BodyPartRecord part)
 		{
 			if (!EBF.Active || EBF.GetMaxHealth_Cached == null)
@@ -608,31 +758,39 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 		private static int CalcIconsWidthForGrouping(IGrouping<HediffDef, Hediff> grouping, bool showDebugOptions)
 		{
+			CompactHediffs_Settings settings = CompactHediffsMod.Settings;
+
 			int iconsWidth = InfoIconWidth;
 			if (showDebugOptions)
 				iconsWidth += DevRemoveButtonWidth;
 
+			bool smartMedicine = SmartMedicine.Active;
+			bool chooseYourMedicine = ChooseYourMedicine.Active;
+
 			foreach (Hediff diff in grouping)
 			{
-				if (diff.StateIcon.HasValue)
+				// StateIcon 每次读都要遍历 comps（TendDuration 的 CompStateIcon 还会算 IsTended/FullyImmune），
+				// 原来一次循环里读了三次，这里只读一次。
+				TextureAndColor stateIcon = diff.StateIcon;
+				if (stateIcon.HasValue)
 				{
-					if (CompactHediffsMod.Settings.tendingIcons && diff.StateIcon.Texture == Textures.Vanilla_TendedIcon_Well_General)
+					if (settings.tendingIcons && stateIcon.Texture == Textures.Vanilla_TendedIcon_Well_General)
 						iconsWidth += TendIconWidth;
 					else
 						iconsWidth += IconHeight;
 				}
 				if (diff.Bleeding)
 				{
-					if (CompactHediffsMod.Settings.bleedingIcons)
+					if (settings.bleedingIcons)
 						iconsWidth += BleedIconWidth;
 					else
 						iconsWidth += IconHeight;
 				}
-				if (SmartMedicine.Active)
+				if (smartMedicine)
 				{
 					iconsWidth += SmartMedicineIconWidth;
 				}
-				if (ChooseYourMedicine.Active)
+				if (chooseYourMedicine)
 				{
 					iconsWidth += ChooseYourMedicine.IconWidth;
 				}
@@ -640,8 +798,55 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			return iconsWidth;
 		}
 
+		/// <summary>
+		/// 单次遍历把分组里的 hediff 分到三个图标列表里（状态图标 / 已包扎的伤口 / 流血），
+		/// 并按原逻辑排序：包扎按治疗质量降序、流血按流血速度降序。
+		/// </summary>
+		private static void CollectIconHediffs(IEnumerable<Hediff> grouping)
+		{
+			tmpStateIconHediffs.Clear();
+			tmpTendedInjuryHediffs.Clear();
+			tmpBleedingHediffs.Clear();
+
+			foreach (Hediff hediff in grouping)
+			{
+				TextureAndColor stateIcon = hediff.StateIcon;
+				if (stateIcon.HasValue)
+				{
+					if (stateIcon.Texture == Textures.Vanilla_TendedIcon_Well_Injury)
+						tmpTendedInjuryHediffs.Add(hediff);
+					else
+						tmpStateIconHediffs.Add(hediff);
+				}
+
+				if (hediff.Bleeding)
+					tmpBleedingHediffs.Add(hediff);
+			}
+
+			if (tmpTendedInjuryHediffs.Count > 1)
+				tmpTendedInjuryHediffs.Sort(tendQualityDescending);
+			if (tmpBleedingHediffs.Count > 1)
+				tmpBleedingHediffs.Sort(bleedRateDescending);
+		}
+
+		private static int CompareTendQuality(Hediff a, Hediff b)
+		{
+			float qa = a.TryGetComp<HediffComp_TendDuration>()?.tendQuality ?? -1f;
+			float qb = b.TryGetComp<HediffComp_TendDuration>()?.tendQuality ?? -1f;
+			return qb.CompareTo(qa);
+		}
+
+		private static int CompareBleedRate(Hediff a, Hediff b)
+		{
+			return b.BleedRate.CompareTo(a.BleedRate);
+		}
+
 		private static string GenLabelForHediffGroup(IGrouping<HediffDef, Hediff> grouping)
 		{
+			// 绝大多数分组只有一条 hediff，直接取标签即可（LabelCap 内部要拼 2~3 个字符串）
+			if (grouping.Count() == 1)
+				return grouping.First().LabelCap;
+
 			string fullLabel = grouping.First().LabelCap;
 			bool mismatch = false;
 			foreach (Hediff hediff in grouping)
@@ -727,7 +932,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			if (settings.severityBarMode == CompactHediffs_Settings.SeverityBarMode.Off)
 				return false;
 
-			if (!settings.showHiddenProgressConditions && hediff.SeverityLabel == null)
+			if (!settings.showHiddenProgressConditions && !HasSeverityLabel(hediff))
 				return false;
 
 			severityFraction = GetSeverityFraction(hediff);
@@ -737,6 +942,19 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				immunityFraction = immunizableComp.Immunity;
 
 			return severityFraction > 0.001f || immunityFraction > 0.001f;
+		}
+
+		/// <summary>
+		/// 该 hediff 是否有 SeverityLabel（原版用它决定“这条状态要不要显示进度”）。
+		/// 这里只关心“有没有”，但 SeverityLabel 是现拼的字符串（Hediff_Injury 是 Severity.ToString("F1")），
+		/// 每帧每条要问好几遍，条数一多就是纯浪费；伤口占绝大多数，直接按 Severity 判空。
+		/// </summary>
+		private static bool HasSeverityLabel(Hediff hediff)
+		{
+			if (hediff.GetType() == typeof(Hediff_Injury))
+				return hediff.Severity != 0f;
+
+			return hediff.SeverityLabel != null;
 		}
 
 		private static int GetSeverityBarHeight(CompactHediffs_Settings settings, Hediff hediff)
@@ -908,12 +1126,17 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 					immunityColor.a *= 0.75f;
 			}
 
-			DrawBarSegment(commonRect, ResolveBarTexture(commonTexture, settings.internalBarHeight), commonColor, settings.internalBarHeight);
-			DrawBarSegment(commonRectMirror, ResolveBarTexture(commonTexture, settings.internalBarHeight), commonColor, settings.internalBarHeight);
-			DrawBarSegment(severityRect, ResolveBarTexture(severityTexture, settings.internalBarHeight), severityColor, settings.internalBarHeight);
-			DrawBarSegment(severityRectMirror, ResolveBarTexture(severityTexture, settings.internalBarHeight), severityColor, settings.internalBarHeight);
-			DrawBarSegment(immunityRect, ResolveBarTexture(immunityTexture, settings.internalBarHeight), immunityColor, settings.internalBarHeight);
-			DrawBarSegment(immunityRectMirror, ResolveBarTexture(immunityTexture, settings.internalBarHeight), immunityColor, settings.internalBarHeight);
+			// 每种贴图只解析一次，别每段都重新比对（一段最多两次）
+			Texture2D commonResolved = ResolveBarTexture(commonTexture, settings.internalBarHeight);
+			Texture2D severityResolved = ResolveBarTexture(severityTexture, settings.internalBarHeight);
+			Texture2D immunityResolved = ResolveBarTexture(immunityTexture, settings.internalBarHeight);
+
+			DrawBarSegment(commonRect, commonResolved, commonColor, settings.internalBarHeight);
+			DrawBarSegment(commonRectMirror, commonResolved, commonColor, settings.internalBarHeight);
+			DrawBarSegment(severityRect, severityResolved, severityColor, settings.internalBarHeight);
+			DrawBarSegment(severityRectMirror, severityResolved, severityColor, settings.internalBarHeight);
+			DrawBarSegment(immunityRect, immunityResolved, immunityColor, settings.internalBarHeight);
+			DrawBarSegment(immunityRectMirror, immunityResolved, immunityColor, settings.internalBarHeight);
 
 			GUI.color = Color.white;
 			return settings.internalBarHeight;
@@ -970,9 +1193,11 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 			// 等价于旧写法里的 texScale = 贴图高 / 条高，再换算成屏幕上的单块宽度
 			float tileWidth = texture.width * (barHeight / (float)texture.height);
-			if (tileWidth < 1f)
+			if (texture.width <= 1 || tileWidth < 1f)
 			{
-				// 1x1 纯色贴图（TexUI.FastFillTex 等）平铺没有意义，拉伸一次就够
+				// 1x1 纯色贴图（TexUI.FastFillTex 等）平铺没有意义，拉伸一次就够。
+				// 注意这里必须按贴图宽度判断：1x1 在 4px 条高下算出来的 tileWidth 是 4，
+				// 只看 tileWidth 会把纯色条切成几十个 quad（纯色的纹理占多数，代价很实在）。
 				GUI.DrawTexture(drawnRect, texture);
 				return;
 			}
@@ -1123,14 +1348,52 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			}
 		}
 
+		/// <summary>
+		/// 按治疗优先级重排身体部位分组。
+		/// 原来是 OrderByDescending(...).ThenByDescending(...) 的惰性链，每帧要枚举两次（DrawHediffListing 与
+		/// AnyHediffsDisplayed 各一次），每次都要给每个分组用 Max(lambda) 算键。这里改为显式循环 + 稳定排序，
+		/// 少掉每组的闭包与枚举器分配，排序结果与 LINQ 完全一致（末位用原始下标做稳定化）。
+		/// </summary>
 		public static IEnumerable<IGrouping<BodyPartRecord, Hediff>> ReorderHediffGroups(IEnumerable<IGrouping<BodyPartRecord, Hediff>> returned, Pawn pawn, bool showBloodLoss)
 		{
-			if (getListPriority == null)
-				return returned.OrderByDescending(x => x.Max(i => i.TendableNow(true) ? i.TendPriority : -1));
+			var entries = new List<(IGrouping<BodyPartRecord, Hediff> Group, float Priority, float ListPriority, int Index)>();
 
-			return returned
-				.OrderByDescending(x => x.Max(i => i.TendableNow(true) ? i.TendPriority : -1))
-				.ThenByDescending(i => getListPriority(i.First().Part));
+			int index = 0;
+			foreach (IGrouping<BodyPartRecord, Hediff> group in returned)
+			{
+				float priority = -1f;
+				foreach (Hediff hediff in group)
+				{
+					if (!hediff.TendableNow(true))
+						continue;
+
+					float tendPriority = hediff.TendPriority;
+					if (tendPriority > priority)
+						priority = tendPriority;
+				}
+
+				float listPriority = getListPriority != null ? getListPriority(group.First().Part) : 0f;
+				entries.Add((group, priority, listPriority, index++));
+			}
+
+			entries.Sort((a, b) =>
+			{
+				int compare = b.Priority.CompareTo(a.Priority);
+				if (compare != 0)
+					return compare;
+
+				compare = b.ListPriority.CompareTo(a.ListPriority);
+				if (compare != 0)
+					return compare;
+
+				return a.Index.CompareTo(b.Index);
+			});
+
+			var result = new List<IGrouping<BodyPartRecord, Hediff>>(entries.Count);
+			foreach (var entry in entries)
+				result.Add(entry.Group);
+
+			return result;
 		}
 	}
 }

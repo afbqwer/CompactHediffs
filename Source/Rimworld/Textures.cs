@@ -37,7 +37,10 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
         public static readonly Texture2D Bar_Cubes = ContentFinder<Texture2D>.Get("bars/cubes");
 
         // 按 4px 条高预烘焙的 1:1 版本（原图是 16px 高，绘制时被压到 1/4，1.7 的 mip 采样会把它糊掉）。
-        // 尺寸：cubes 11x4 / dnatwist 28x4 / infected 13x4 / malnutrition 18x4 / pill 13x4 / pill_big 15x4 / ragged 13x4
+        // 每张图是原始图案横向重复 16 次：单块像素仍是 1:1（不会被采样糊掉），
+        // 但一次 DrawTextureWithTexCoords 就能铺满 176~448px，
+        // 平铺所需的 quad 数因此少 16 倍（每帧几千个 quad 是 hediff 一多就卡的主要原因）。
+        // 单块原始尺寸：cubes 11x4 / dnatwist 28x4 / infected 13x4 / malnutrition 18x4 / pill 13x4 / pill_big 15x4 / ragged 13x4
         public static readonly Texture2D Bar_Pill_1to1 = ContentFinder<Texture2D>.Get("bars/crisp/pill");
         public static readonly Texture2D Bar_PillBig_1to1 = ContentFinder<Texture2D>.Get("bars/crisp/pill_big");
         public static readonly Texture2D Bar_Ragged_1to1 = ContentFinder<Texture2D>.Get("bars/crisp/ragged");
