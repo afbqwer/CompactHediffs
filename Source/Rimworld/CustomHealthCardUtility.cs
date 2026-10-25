@@ -914,15 +914,46 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 			return settings.internalBarHeight;
 		}
 
+		/// <summary>
+		/// 画一段进度条。贴图按“高度铺满条高、宽度等比缩放”的尺寸横向平铺。
+		/// 注意：1.7 的 IMGUI 通道全局只有两个 ClampToEdge 采样器（<c>ImGuiVulkanRenderer.CreateSampler</c>），
+		/// texCoords 一旦超出 [0,1] 就会被钳到边缘像素，<c>Texture.wrapMode = Repeat</c> 在这条路径上完全不起作用
+		/// —— 那正是“左边一小块纹理、右边一片纯色”的成因（旧版靠 Unity 的 Repeat 采样器平铺）。
+		/// 所以这里改成手工分块，每块 UV 都保持在 [0,1] 内。
+		/// </summary>
 		private static void DrawBarSegment(Rect? rect, Texture2D texture, Color color, int barHeight)
 		{
-			if (!rect.HasValue || barHeight <= 0)
+			if (!rect.HasValue || barHeight <= 0 || texture == null)
+				return;
+
+			Rect drawnRect = rect.Value;
+			if (drawnRect.width <= 0f || drawnRect.height <= 0f || texture.width <= 0 || texture.height <= 0)
 				return;
 
 			GUI.color = color;
-			var drawnRect = rect.Value;
-			float texScale = texture.height / (float)barHeight;
-			GUI.DrawTextureWithTexCoords(drawnRect, texture, new Rect(0, 0, texScale * (drawnRect.width / texture.width), texScale * (drawnRect.height / texture.height)));
+
+			// 等价于旧写法里的 texScale = 贴图高 / 条高，再换算成屏幕上的单块宽度
+			float tileWidth = texture.width * (barHeight / (float)texture.height);
+			if (tileWidth < 1f)
+			{
+				// 1x1 纯色贴图（TexUI.FastFillTex 等）平铺没有意义，拉伸一次就够
+				GUI.DrawTexture(drawnRect, texture);
+				return;
+			}
+
+			float right = drawnRect.xMax;
+			int tiles = Mathf.CeilToInt(drawnRect.width / tileWidth);
+			for (int i = 0; i < tiles; i++)
+			{
+				float start = drawnRect.x + i * tileWidth;
+				float end = Math.Min(start + tileWidth, right);
+				if (end - start <= 0.01f)
+					break;
+
+				// 末块不足一整块时按比例裁切 UV，视觉上等同于被条边缘截断
+				Rect uv = new Rect(0f, 0f, Math.Min((end - start) / tileWidth, 1f), 1f);
+				GUI.DrawTextureWithTexCoords(new Rect(start, drawnRect.y, end - start, drawnRect.height), texture, uv);
+			}
 		}
 
 		private static int DrawCumulativeThreatmentBar(CompactHediffs_Settings settings, Rect barRect, Hediff hediff)

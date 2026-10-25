@@ -38,6 +38,9 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
         static Textures()
         {
+            // 1.7 的 IMGUI 通道用固定的 ClampToEdge 采样器，wrapMode 对它无效；
+            // 平铺由 CustomHealthCardUtility.DrawBarSegment 手工分块实现。
+            // 这里保留 Repeat 只是为了 GetPixel 之类的读取路径和将来走材质渲染时行为一致。
             Bar_Pill.wrapMode = TextureWrapMode.Repeat;
             Bar_PillBig.wrapMode = TextureWrapMode.Repeat;
             Bar_Ragged.wrapMode = TextureWrapMode.Repeat;
