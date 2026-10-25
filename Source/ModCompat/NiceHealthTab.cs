@@ -169,6 +169,19 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
 
                 openFloatMenuForPartMethod = AccessTools.Method("NiceHealthTab.DollOperations:OpenFloatMenuForPart");
 
+                // NHT 的 InspectTabBase.UpdateSize 补丁每帧把宽度重置成 WindowWidthFor。
+                // 在源头把本模组的额外宽度加进去，标签页加宽才能真正生效（高度由构造补丁负责）。
+                var windowWidthForMethod = AccessTools.Method("NiceHealthTab.NewTabViewRenderer:WindowWidthFor");
+                if (windowWidthForMethod != null)
+                {
+                    harmony.Patch(windowWidthForMethod,
+                        postfix: new HarmonyMethod(typeof(NiceHealthTab), nameof(WindowWidthFor_Postfix)));
+                }
+                else
+                {
+                    Log.Warning("[CompactHediffs] 找不到 Nice Health Tab 的 WindowWidthFor，标签页加宽可能不生效。");
+                }
+
                 var addPartBlockMethod = FindMethod(bodyPartTableType, "AddPartBlock");
                 var partBlockDrawMethod = AccessTools.Method(partBlockType, "Draw");
                 var rebuildMethod = FindMethod(bodyPartTableType, "RebuildIfChanged");
@@ -585,6 +598,19 @@ namespace PeteTimesSix.CompactHediffs.ModCompat
                 return;
 
             partHediffs.Remove(__instance);
+        }
+
+        /// <summary>
+        /// NHT 每帧用 WindowWidthFor 重置标签页宽度；这里叠加本模组的“加宽”设置。
+        /// 高度不需要在这里处理：NHT 的 UpdateSize 只改 x，构造补丁（Priority.Last）负责 y。
+        /// </summary>
+        public static void WindowWidthFor_Postfix(ref float __result)
+        {
+            var settings = CompactHediffsMod.Settings;
+            if (settings == null || !settings.Enabled)
+                return;
+
+            __result += settings.extraTabWidth;
         }
 
         /// <summary>影响行高的设置变化后，让 NHT 重新测一遍（否则列表会按旧高度留白/压字）。</summary>

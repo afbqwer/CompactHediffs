@@ -29,6 +29,7 @@ namespace PeteTimesSix.CompactHediffs.HarmonyPatches
             }
         }
 
+        [HarmonyPriority(Priority.Last)]
         [HarmonyPostfix]
         public static void Postfix(ITab_Pawn_Health __instance)
         {
@@ -42,6 +43,13 @@ namespace PeteTimesSix.CompactHediffs.HarmonyPatches
         {
             if (SizeField == null || SingletonRef == null)
                 return;
+
+            // 总开关关闭时保持原版/NHT 原始尺寸，别让设置窗口里的滑条绕过开关
+            if (CompactHediffsMod.Settings != null && !CompactHediffsMod.Settings.Enabled)
+            {
+                extraWidth = 0f;
+                extraHeight = 0f;
+            }
 
             if (!HasInitialSize)
             {
