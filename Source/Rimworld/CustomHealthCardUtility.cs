@@ -112,6 +112,9 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 		private const int CalcHeightCacheLimit = 2048;
 
+		/// <summary>同一分组最多列出的 tooltip 条数，其余折成“……另有 N 条”。</summary>
+		private const int MaxHediffTooltips = 10;
+
 		private static bool calcHeightEpochValid;
 		private static GameFont calcHeightFont;
 		private static float calcHeightFontSize = -1f;
@@ -552,11 +555,24 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 					// 原来在这里直接 GetTooltip 全部 hediff，鼠标扫过一排 40 条伤口的行时，
 					// 每帧白拼 40 段文本、而且 input phase 拼的那份还会被 TipRegion 直接丢掉。
 					int tipIndex = 0;
+					int shownHediffs = 0;
+					int omittedHediffs = 0;
+					// 同一行里多个分组共用一个 id 空间，必须带上 tooltipIDOffset，否则第二组会覆盖第一组的提示
+					int tipIdBase = (int)currentY + 117857 + tooltipIDOffset;
+
 					foreach (Hediff individualHediff in grouping)
 					{
+						// 堆叠几十条时全列出来既卡又没人看，只给前 N 条，剩下的折成一句提示
+						if (shownHediffs >= MaxHediffTooltips)
+						{
+							omittedHediffs++;
+							continue;
+						}
+						shownHediffs++;
+
 						Hediff localHediff = individualHediff;
 						TooltipHandler.TipRegion(fullHediffRect, new TipSignal(
-							() => GetHediffTooltipCached(localHediff, pawn), (int)currentY + 117857 + tipIndex++));
+							() => GetHediffTooltipCached(localHediff, pawn), tipIdBase + tipIndex++));
 
 						if (Pawnmorpher.Active && Pawnmorpher.GetTooltip != null)
 						{
@@ -564,10 +580,17 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 							string tooltip = Pawnmorpher.GetTooltip(new List<Hediff>() { individualHediff });
 							if (!string.IsNullOrWhiteSpace(tooltip))
 							{
-								TooltipHandler.TipRegion(fullHediffRect, new TipSignal(() => tooltip, (int)currentY + 117857 + tipIndex++));
+								TooltipHandler.TipRegion(fullHediffRect, new TipSignal(() => tooltip, tipIdBase + tipIndex++));
 							}
 						}
 					}
+
+					if (omittedHediffs > 0)
+					{
+						string moreText = "CompactHediffs_OmittedHediffTooltips".Translate(omittedHediffs);
+						TooltipHandler.TipRegion(fullHediffRect, new TipSignal(moreText, tipIdBase + tipIndex++));
+					}
+
 					tooltipIDOffset += tipIndex;
 				}
 
@@ -858,6 +881,9 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 
 			bool customTendingIcons = settings.tendingIcons;
 			bool customBleedingIcons = settings.bleedingIcons;
+			// 本模组的老行为是“每条 hediff 一个图标”（堆叠时能看出每一条各自的治疗质量/流血程度）。
+			// 关掉后按贴图去重：治疗图标只有 6 档、流血图标 6 档，所以上限是 6 个而不是 N 个。
+			bool dedupe = !settings.perHediffIcons;
 
 			foreach (Hediff hediff in grouping)
 			{
@@ -869,27 +895,27 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 					if (stateIcon.Texture == Textures.Vanilla_TendedIcon_Well_Injury)
 					{
 						float quality = hediff.TryGetComp<HediffComp_TendDuration>()?.tendQuality ?? -1f;
-						AddUniqueIcon(tmpTendedIcons, new IconEntry
+						AddIcon(tmpTendedIcons, new IconEntry
 						{
 							Texture = customTendingIcons ? TendingIconFor(quality) : stateIcon.Texture,
 							Color = stateIcon.Color,
 							SortKey = quality,
-						});
+						}, dedupe);
 					}
 					else
 					{
-						AddUniqueIcon(tmpStateIcons, new IconEntry
+						AddIcon(tmpStateIcons, new IconEntry
 						{
 							Texture = stateIcon.Texture,
 							Color = stateIcon.Color,
-						});
+						}, dedupe);
 					}
 				}
 
 				if (hediff.Bleeding)
 				{
 					float bleedRate = hediff.BleedRate;
-					AddUniqueIcon(tmpBleedingIcons, new IconEntry
+					AddIcon(tmpBleedingIcons, new IconEntry
 					{
 						Texture = customBleedingIcons ? BleedingIconFor(bleedRate) : Textures.Vanilla_BleedingIcon,
 						Color = customBleedingIcons
@@ -897,7 +923,7 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 							: Color.white,
 						BleedRate = bleedRate,
 						SortKey = bleedRate,
-					});
+					}, dedupe);
 				}
 			}
 
@@ -908,13 +934,16 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 				tmpBleedingIcons.Sort(iconSortKeyDescending);
 		}
 
-		/// <summary>同贴图只留第一个（即排序后最严重/治疗最好的那个）。同贴图图标视觉完全一致，去掉不影响观感。</summary>
-		private static void AddUniqueIcon(List<IconEntry> list, IconEntry entry)
+		private static void AddIcon(List<IconEntry> list, IconEntry entry, bool dedupe)
 		{
-			for (int i = 0; i < list.Count; i++)
+			if (dedupe)
 			{
-				if (list[i].Texture == entry.Texture)
-					return;
+				// 同贴图只留第一个。同贴图图标视觉完全一致，去掉不影响观感。
+				for (int i = 0; i < list.Count; i++)
+				{
+					if (list[i].Texture == entry.Texture)
+						return;
+				}
 			}
 			list.Add(entry);
 		}

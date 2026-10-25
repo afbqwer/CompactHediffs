@@ -50,6 +50,8 @@ namespace PeteTimesSix.CompactHediffs
         public bool bleedingIcons = true;
         public bool tendingIcons = true;
         public bool bloodlossSpecialHandling = true;
+        /// <summary>true = 本模组的老行为，每条 hediff 各画一个状态图标；false = 相同图标只画一个。</summary>
+        public bool perHediffIcons = true;
 
         public BarPosition severityBarsPosition = BarPosition.Above;
         public SeverityBarMode severityBarMode = SeverityBarMode.LeftToRight;
@@ -85,6 +87,7 @@ namespace PeteTimesSix.CompactHediffs
             Scribe_Values.Look(ref healtbarsBarsPosition, "healtbarsBarsPosition", BarPosition.Above);
             Scribe_Values.Look(ref bleedingIcons, "bleedingIcons", true);
             Scribe_Values.Look(ref tendingIcons, "tendingIcons", true);
+            Scribe_Values.Look(ref perHediffIcons, "perHediffIcons", true);
             Scribe_Values.Look(ref bloodlossSpecialHandling, "bloodlossSpecialHandling", true);
 
             Scribe_Values.Look(ref extraTabWidth, "extraTabWidth", 100);
@@ -172,6 +175,7 @@ namespace PeteTimesSix.CompactHediffs
             listingStandardWide.CheckboxLabeled("settings_severityBarHighContrast".Translate(), ref severityBarHighContrast, "settings_severityBarHighContrast_tooltip".Translate());
             listingStandardWide.CheckboxLabeled("settings_showCumulativeThreatment".Translate(), ref showCumulativeThreatment, "settings_showCumulativeThreatment_tooltip".Translate());
             listingStandardWide.CheckboxLabeled("settings_showHiddenProgressConditions".Translate(), ref showHiddenProgressConditions, "settings_showHiddenProgressConditions_tooltip".Translate());
+            listingStandardWide.CheckboxLabeled("settings_perHediffIcons".Translate(), ref perHediffIcons, "settings_perHediffIcons_tooltip".Translate());
 
             listingStandardWide.NewColumn();
 

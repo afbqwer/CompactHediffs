@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <LanguageData>
 	<CompactHediffs_ModTitle>Compact Hediffs</CompactHediffs_ModTitle>
+	<CompactHediffs_OmittedHediffTooltips>...and {0} more</CompactHediffs_OmittedHediffTooltips>
 	
 	<settings_selectExamplePawnIngame>Select a pawn in game to see a preview.</settings_selectExamplePawnIngame>
 	
@@ -41,6 +42,10 @@
 	
 	<settings_tendingIcons>Custom tend quality icons</settings_tendingIcons>
 	<settings_tendingIcons_tooltip>Customized icons depending on threatment quality replace the vanilla one</settings_tendingIcons_tooltip>
+	
+	<settings_perHediffIcons>An icon per condition</settings_perHediffIcons>
+	<settings_perHediffIcons_tooltip>Draw one state icon for every condition of a stack instead of one per distinct icon. Turning this off makes large stacks of similar wounds much cheaper to draw.</settings_perHediffIcons_tooltip>
+	
 	
 	<settings_bloodlossSpecialHandling>Custom bloodloss handling</settings_bloodlossSpecialHandling>
 	<settings_bloodlossSpecialHandling_tooltip>Special-case handling of bloodloss (color changing depending on severity, blink speed depending on speed)</settings_bloodlossSpecialHandling_tooltip>

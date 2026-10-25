@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <LanguageData>
 	<CompactHediffs_ModTitle>紧凑状态栏</CompactHediffs_ModTitle>
+	<CompactHediffs_OmittedHediffTooltips>……另有 {0} 条</CompactHediffs_OmittedHediffTooltips>
 	
 	<settings_selectExamplePawnIngame>在游戏中选中一名角色以查看预览。</settings_selectExamplePawnIngame>
 	
@@ -41,6 +42,9 @@
 	
 	<settings_tendingIcons>自定义治疗质量图标</settings_tendingIcons>
 	<settings_tendingIcons_tooltip>用随治疗质量变化的自定义图标替换原版图标</settings_tendingIcons_tooltip>
+	
+	<settings_perHediffIcons>每条状态各显示一个图标</settings_perHediffIcons>
+	<settings_perHediffIcons_tooltip>堆叠的多条状态会为每一条各画一个状态图标，而不是每种图标只画一个。关掉后，同部位大量同类伤口会明显更省性能。</settings_perHediffIcons_tooltip>
 	
 	<settings_bloodlossSpecialHandling>失血特殊显示</settings_bloodlossSpecialHandling>
 	<settings_bloodlossSpecialHandling_tooltip>对失血做特殊处理（颜色随严重程度变化，闪烁速度随出血速度变化）</settings_bloodlossSpecialHandling_tooltip>
