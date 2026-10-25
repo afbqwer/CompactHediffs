@@ -100,6 +100,9 @@ namespace PeteTimesSix.CompactHediffs.HarmonyPatches
     /// <summary>
     /// 记录健康列表的可视区高度，供行绘制做滚动裁剪。
     /// 列表本身就在滚动视图里，滚出屏幕的行每帧仍在做文本排版和进度条分块，hediff 一多就是主要开销。
+    ///
+    /// 用 Finalizer 而不是 Postfix：原方法抛异常时 Postfix 不会执行，可视区状态会留在“激活”状态；
+    /// Finalizer 在 finally 里跑，能保证每张卡结束后状态一定复位。
     /// </summary>
     [HarmonyPatch(typeof(HealthCardUtility), "DrawHediffListing")]
     public static class HealthCardUtility_DrawHediffListing
@@ -111,8 +114,8 @@ namespace PeteTimesSix.CompactHediffs.HarmonyPatches
                 CustomHealthCardUtility.BeginListingViewport(rect.height);
         }
 
-        [HarmonyPostfix]
-        public static void Postfix()
+        [HarmonyFinalizer]
+        public static void Finalizer()
         {
             CustomHealthCardUtility.EndListingViewport();
         }

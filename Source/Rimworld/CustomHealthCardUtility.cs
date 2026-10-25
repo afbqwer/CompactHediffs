@@ -48,7 +48,12 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 		private static GetTooltipDelegate? getTooltip;
 		private static GetListPriorityDelegate? getListPriority;
 
-		/// <summary>HealthCardUtility.scrollPosition，用于滚动裁剪；解析失败时不做裁剪。</summary>
+		/// <summary>
+		/// HealthCardUtility.scrollPosition，用于滚动裁剪；解析失败时不做裁剪。
+		/// 它是原版的静态字段，所有健康卡共用同一个值（原版本身如此）。
+		/// 裁剪阈值的用法是「EnterScrollView 之后、绘制这一卡的行时再读」，
+		/// 读到的必然是当前这张卡刚刚写进去的值，因此即使多张卡互相覆盖也不会与画面错位。
+		/// </summary>
 		private static AccessTools.FieldRef<Vector2>? scrollPositionField;
 
 		/// <summary>核心私有成员至少解析成功一个，才值得接管原版行绘制。</summary>
@@ -137,27 +142,54 @@ namespace PeteTimesSix.CompactHediffs.Rimworld
 		// 身体部位标签里的 \b 正则原来每次 new Regex，改为按标签缓存（模板就那几个）。
 		private static readonly Dictionary<string, Regex> wordBoundaryRegexCache = new Dictionary<string, Regex>();
 
-		// 滚动裁剪：由 DrawHediffListing 的补丁在前后包一层（只在它内部绘制行，所以不需要帧号标记）。
-		private static bool viewportActive;
+		// 滚动裁剪：由 DrawHediffListing 的补丁在前后包一层。
+		// 用「深度 + 高度栈」而不是一个 bool，原因是原版同一帧里可能画不止一张健康卡
+		// （观察面板的健康标签页、远行队健康页、成长抉择对话框里的 hediff 列表都可能同时出现）：
+		//   1) 两张卡是先后绘制的，各自的行都在自己的 Begin/End 区间内画完，所以互不影响；
+		//   2) 万一有别的 mod 在列表内部再调一次 DrawHediffListing（嵌套），外层高度会在出栈时恢复，
+		//      而不是被内层清掉、让外层后半段失去裁剪；
+		//   3) 前缀被别的 mod 拦掉时 Finalizer 仍会跑，End 里的深度保护负责兜住，不会让深度变负。
+		private static int viewportDepth;
 		private static float viewportHeight;
+		private static readonly Stack<float> viewportHeightStack = new Stack<float>(4);
 		private const float ViewportCullMargin = 128f;
 
 		/// <summary>进入 DrawHediffListing 时记录可视区高度（列表高度减去底部流血提示行）。</summary>
 		public static void BeginListingViewport(float listingHeight)
 		{
-			viewportActive = true;
+			if (viewportDepth > 0)
+				viewportHeightStack.Push(viewportHeight);
+
+			viewportDepth++;
 			viewportHeight = listingHeight - Text.LineHeight;
 		}
 
 		public static void EndListingViewport()
 		{
-			viewportActive = false;
+			if (viewportDepth <= 0)
+			{
+				viewportDepth = 0;
+				viewportHeight = 0f;
+				viewportHeightStack.Clear();
+				return;
+			}
+
+			viewportDepth--;
+			if (viewportDepth > 0 && viewportHeightStack.Count > 0)
+			{
+				viewportHeight = viewportHeightStack.Pop();
+			}
+			else
+			{
+				viewportHeight = 0f;
+				viewportHeightStack.Clear();
+			}
 		}
 
 		/// <summary>整行（含身体部位标签）完全滚出可视区时返回 true，此时只需要累加高度、不需要绘制。</summary>
 		private static bool IsRowOutsideViewport(int rowY, int rowHeight)
 		{
-			if (!viewportActive || viewportHeight <= 0f || scrollPositionField == null)
+			if (viewportDepth <= 0 || viewportHeight <= 0f || scrollPositionField == null)
 				return false;
 
 			float scrollY = scrollPositionField.Invoke().y;
